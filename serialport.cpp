@@ -101,33 +101,7 @@ uint16_t SerialPort::calcCRC16()
 
 void SerialPort::handle_data()
 {
-    static int state=0;
-    QByteArray data = port->readAll();
-    for(int i=0;i<data.size();i++)
-    {
-        if( state==0 && static_cast<unsigned char>(data.at(i))==0x55 )
-        {
-            pointData.clear();
-            state++;
-        }
-        else if(state==1)
-        {
-            if(static_cast<unsigned char>(data.at(i))==0xaa)
-                state++;
-            else
-                state=0;
-        }
-        else if(state>=2)
-        {
-            pointData.append(data.at(i));
-            state++;
-            if(state>=9)
-            {
-                state=0;
-                emit receive_data(pointData);
-            }
-        }
-    }
+
 }
 
 void SerialPort::write_data()

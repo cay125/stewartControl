@@ -5,10 +5,11 @@
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
-    QString com_name(argv[1]);
-    qDebug() << "Program Start\nusing Serial:" << com_name;
-    Controller controller(argv[1]);
-    controller.simpleOperation();
+    qDebug() << "Program Start\nusing Serial:";
+    qDebug()<<"card:"<<argv[1]<<" modbus:"<<argv[2];
+    Controller controller(argv[1], argv[2]);
+    //controller.simpleOperation();
+    controller.reset();
     qDebug()<<"enter qt event loop";
     return a.exec();
 }

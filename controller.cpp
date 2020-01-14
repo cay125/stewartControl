@@ -1,20 +1,25 @@
 #include <QDebug>
+#include <QModbusRtuSerialMaster>
 #include "controller.h"
 #include "GAS_N.h"
-Controller::Controller(char* com):uart(new SerialPort),timer(new QTimer)
+Controller::Controller(char* com_card,char* com_modbus):uart(new SerialPort),timer(new QTimer)
 {
-    int res=GA_Open(1,com);
-    if(res==0)
-    {
-        qDebug()<<"open card successful";
-    }
-    else
-    {
+    if(GA_Open(1,com_card))
         qDebug()<<"open card failed";
-    }
-    double pos=0;
-    GA_GetAxisPrfPos(6,&pos);
-    qDebug()<<"now at: "<<pos;
+    else
+        qDebug()<<"open card successful";
+    modbusDevice=new QModbusRtuSerialMaster(this);
+    modbusDevice->setConnectionParameter(QModbusDevice::SerialPortNameParameter, com_modbus);
+    modbusDevice->setConnectionParameter(QModbusDevice::SerialParityParameter,QSerialPort::NoParity);
+    modbusDevice->setConnectionParameter(QModbusDevice::SerialBaudRateParameter,QSerialPort::Baud19200);
+    modbusDevice->setConnectionParameter(QModbusDevice::SerialDataBitsParameter,QSerialPort::Data8);
+    modbusDevice->setConnectionParameter(QModbusDevice::SerialStopBitsParameter,QSerialPort::OneStop);
+    modbusDevice->setTimeout(1000);
+    modbusDevice->setNumberOfRetries(3);
+    if(!modbusDevice->connectDevice())
+        qDebug()<<"modbus connection failed";
+    else
+        qDebug()<<"modbus connection successful";
 }
 void Controller::connectedSlot()
 {
@@ -108,7 +113,51 @@ void Controller::timerSlot()
     cnt++;
     if(cnt>1)
         timer->stop();
+}
+void Controller::reset()
+{
+    GetZphasePos(1);
+}
+void Controller::GetZphasePos(int addr)
+{
+    QModbusDataUnit dataUnit(QModbusDataUnit::HoldingRegisters, 4032, 2);
+    if (auto *reply = modbusDevice->sendReadRequest(dataUnit, addr))
+    {
+        if (!reply->isFinished())
+            connect(reply, &QModbusReply::finished, this, &Controller::modbusReadReady);
+        else
+            delete reply; // broadcast replies return immediately
+    }
+    else
+    {
+        qDebug() << modbusDevice->errorString();
+    }
+}
+void Controller::modbusReadReady()
+{
+    auto reply = qobject_cast<QModbusReply *>(sender());
+    if (!reply)
+        return;
 
+    if (reply->error() == QModbusDevice::NoError)
+    {
+        const QModbusDataUnit unit = reply->result();
+        for (uint i = 0; i < unit.valueCount(); i++)
+        {
+            const QString entry = tr("Address: %1, Value: %2").arg(unit.startAddress() + i).arg(QString::number(unit.value(i), unit.registerType() <= QModbusDataUnit::Coils ? 10 : 16));
+            qDebug()<<"modbus receive data: "<<entry;
+        }
+    }
+    else if (reply->error() == QModbusDevice::ProtocolError)
+    {
+        QString msg = tr("Read response error: %1 (Mobus exception: 0x%2)").arg(reply->errorString()).arg(reply->rawResult().exceptionCode(), -1, 16);
+        qDebug()<<"error msg: "<<msg;
+    }
+    else
+    {
+        QString msg = tr("Read response error: %1 (code: 0x%2)").arg(reply->errorString()).arg(reply->error(), -1, 16);
+        qDebug()<<"error msg: "<<msg;
+    }
 
-
+    reply->deleteLater();
 }
