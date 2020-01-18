@@ -19,7 +19,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         controller.cpp \
         main.cpp \
-        serialport.cpp
+        modbuscontroller.cpp
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -29,6 +29,6 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 HEADERS += \
     GAS_N.h \
     controller.h \
-    serialport.h
+    modbuscontroller.h
 
 LIBS += ../stewartControl/GAS.lib

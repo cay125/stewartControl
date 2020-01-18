@@ -2,29 +2,20 @@
 #include <QModbusRtuSerialMaster>
 #include "controller.h"
 #include "GAS_N.h"
-Controller::Controller(char* com_card,char* com_modbus):uart(new SerialPort),timer(new QTimer)
+QMutex m_mutex;
+QWaitCondition m_cond;
+Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController)
 {
     if(GA_Open(1,com_card))
         qDebug()<<"open card failed";
     else
         qDebug()<<"open card successful";
-    modbusDevice=new QModbusRtuSerialMaster(this);
-    modbusDevice->setConnectionParameter(QModbusDevice::SerialPortNameParameter, com_modbus);
-    modbusDevice->setConnectionParameter(QModbusDevice::SerialParityParameter,QSerialPort::NoParity);
-    modbusDevice->setConnectionParameter(QModbusDevice::SerialBaudRateParameter,QSerialPort::Baud19200);
-    modbusDevice->setConnectionParameter(QModbusDevice::SerialDataBitsParameter,QSerialPort::Data8);
-    modbusDevice->setConnectionParameter(QModbusDevice::SerialStopBitsParameter,QSerialPort::OneStop);
-    modbusDevice->setTimeout(1000);
-    modbusDevice->setNumberOfRetries(3);
-    if(!modbusDevice->connectDevice())
-        qDebug()<<"modbus connection failed";
-    else
-        qDebug()<<"modbus connection successful";
+    connect(this,&Controller::sendReadRequestSignal,RS485,&modbusController::sendReadRequestSlot);
+    connect(this,&Controller::sendWriteRequestSignal,RS485,&modbusController::sendWriteRequestSlot);
+    connect(this,&Controller::initModbusSignal,RS485,&modbusController::initModbusSlot);
+    emit initModbusSignal(com_modbus);
 }
-void Controller::connectedSlot()
-{
 
-}
 void Controller::simpleOperation()
 {
     short axis=6;
@@ -114,50 +105,37 @@ void Controller::timerSlot()
     if(cnt>1)
         timer->stop();
 }
-void Controller::reset()
+
+void Controller::reset(int addr)
 {
-    GetZphasePos(1);
+//    GetZphasePos(1);
+//    long res_home=0;
+//    GA_GetDiRaw(MC_HOME,&res_home);
+    QVariant data;
+    QVector<quint16> dd;
+    dd.append(1);dd.append(0);
+    data.setValue(dd);
+    m_mutex.lock();
+    emit sendWriteRequestSignal(addr,2032,2,data);
+    m_cond.wait(&m_mutex);
+    m_mutex.unlock();
 }
+
 void Controller::GetZphasePos(int addr)
 {
-    QModbusDataUnit dataUnit(QModbusDataUnit::HoldingRegisters, 4032, 2);
-    if (auto *reply = modbusDevice->sendReadRequest(dataUnit, addr))
-    {
-        if (!reply->isFinished())
-            connect(reply, &QModbusReply::finished, this, &Controller::modbusReadReady);
-        else
-            delete reply; // broadcast replies return immediately
-    }
-    else
-    {
-        qDebug() << modbusDevice->errorString();
-    }
+    m_mutex.lock();
+    emit sendReadRequestSignal(addr,4032);
+    m_cond.wait(&m_mutex);
+    m_mutex.unlock();
 }
-void Controller::modbusReadReady()
+void Controller::SetDriverEnable(int addr)
 {
-    auto reply = qobject_cast<QModbusReply *>(sender());
-    if (!reply)
-        return;
-
-    if (reply->error() == QModbusDevice::NoError)
-    {
-        const QModbusDataUnit unit = reply->result();
-        for (uint i = 0; i < unit.valueCount(); i++)
-        {
-            const QString entry = tr("Address: %1, Value: %2").arg(unit.startAddress() + i).arg(QString::number(unit.value(i), unit.registerType() <= QModbusDataUnit::Coils ? 10 : 16));
-            qDebug()<<"modbus receive data: "<<entry;
-        }
-    }
-    else if (reply->error() == QModbusDevice::ProtocolError)
-    {
-        QString msg = tr("Read response error: %1 (Mobus exception: 0x%2)").arg(reply->errorString()).arg(reply->rawResult().exceptionCode(), -1, 16);
-        qDebug()<<"error msg: "<<msg;
-    }
-    else
-    {
-        QString msg = tr("Read response error: %1 (code: 0x%2)").arg(reply->errorString()).arg(reply->error(), -1, 16);
-        qDebug()<<"error msg: "<<msg;
-    }
-
-    reply->deleteLater();
+    QVariant data;
+    QVector<quint16> dd;
+    dd.append(1);dd.append(0);
+    data.setValue(dd);
+    m_mutex.lock();
+    emit sendWriteRequestSignal(addr,1008,2,data);
+    m_cond.wait(&m_mutex);
+    m_mutex.unlock();
 }
