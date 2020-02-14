@@ -1,5 +1,6 @@
 #include <QDebug>
 #include <QModbusRtuSerialMaster>
+#include <iostream>
 #include "controller.h"
 #include "GAS_N.h"
 QMutex m_mutex;
@@ -14,6 +15,8 @@ Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(
     connect(this,&Controller::sendWriteRequestSignal,RS485,&modbusController::sendWriteRequestSlot);
     connect(this,&Controller::initModbusSignal,RS485,&modbusController::initModbusSlot);
     emit initModbusSignal(com_modbus);
+    for(int i=1;i<=6;i++)
+        setDriverEnable(i,true);
 }
 
 void Controller::simpleOperation()
@@ -108,17 +111,37 @@ void Controller::timerSlot()
 
 void Controller::reset(int addr)
 {
-//    GetZphasePos(1);
-//    long res_home=0;
-//    GA_GetDiRaw(MC_HOME,&res_home);
     QVariant data;
     QVector<quint16> dd;
     dd.append(1);dd.append(0);
     data.setValue(dd);
     m_mutex.lock();
-    emit sendWriteRequestSignal(addr,2032,2,data);
+    emit sendWriteRequestSignal(addr,2030,2,data);
     m_cond.wait(&m_mutex);
     m_mutex.unlock();
+}
+void Controller::resetAll()
+{
+    for(int i=1;i<=6;i++)
+        reset(i);
+    while(true)
+    {
+        for(int i=1;i<=6;i++)
+            GetZphasePos(i);
+        std::cout<<"Current Pos: ";
+        int cntZros=0;
+        for(int i=0;i<6;i++)
+        {
+            std::cout<<"|addr"<<i+1<<" "<<RS485->zPhasePos[i]->GetCurrentPos()<<"| ";
+            if(RS485->zPhasePos[i]->GetCurrentPos()==0)
+                cntZros++;
+        }
+        std::cout<<"\n";
+        if(cntZros==6)
+            break;
+        QThread::msleep(50);
+    }
+    qDebug()<<"Mortor Reset Finished";
 }
 
 void Controller::GetZphasePos(int addr)
@@ -128,11 +151,11 @@ void Controller::GetZphasePos(int addr)
     m_cond.wait(&m_mutex);
     m_mutex.unlock();
 }
-void Controller::SetDriverEnable(int addr)
+void Controller::setDriverEnable(int addr, bool value)
 {
     QVariant data;
     QVector<quint16> dd;
-    dd.append(1);dd.append(0);
+    dd.append(value==true?1:0);dd.append(0);
     data.setValue(dd);
     m_mutex.lock();
     emit sendWriteRequestSignal(addr,1008,2,data);

@@ -19,13 +19,14 @@ class Controller : public QObject
 public:
     Controller(char* com_card, char* com_modbus, QObject* parent=nullptr);
     void simpleOperation();
-    void reset(int addr);
-    void SetDriverEnable(int addr);
+    void resetAll();
+    void setDriverEnable(int addr, bool value);
 private:
     QTimer *timer;
     QModbusClient *modbusDevice;
     modbusController *RS485;
     void GetZphasePos(int addr);
+    void reset(int addr);
 private slots:
     void timerSlot();
 signals:
