@@ -2,6 +2,7 @@
 #define CONTROLLER_H
 
 #include "modbuscontroller.h"
+#include "inversekinematic.h"
 #include <QString>
 #include <QTimer>
 #include <QModbusClient>
@@ -9,6 +10,8 @@
 #include <QThread>
 #include <QMutex>
 #include <QWaitCondition>
+#include <QTcpServer>
+#include <QTcpSocket>
 
 extern QMutex m_mutex;
 extern QWaitCondition m_cond;
@@ -25,7 +28,12 @@ private:
     QTimer *timer;
     QModbusClient *modbusDevice;
     modbusController *RS485;
+    QTcpServer *tcpServer;
+    QList<QTcpSocket *>tcpClients;
+    inverseKinematic *kinematicModule;
+    double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
     void GetZphasePos(int addr);
+    void GetCurrentPos(int addr);
     void reset(int addr);
 private slots:
     void timerSlot();

@@ -1,6 +1,7 @@
 QT -= gui
 QT += serialport
 QT += serialbus
+QT += network
 
 CONFIG += c++11 console
 CONFIG -= app_bundle
@@ -18,6 +19,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
         controller.cpp \
+        inversekinematic.cpp \
         main.cpp \
         modbuscontroller.cpp
 
@@ -29,6 +31,9 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 HEADERS += \
     GAS_N.h \
     controller.h \
+    inversekinematic.h \
     modbuscontroller.h
+
+INCLUDEPATH += C:/Users/xiang/Downloads/eigen-eigen-323c052e1731/
 
 LIBS += ../stewartControl/GAS.lib
