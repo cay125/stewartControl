@@ -28,6 +28,7 @@ class modbusController : public QObject
     Q_OBJECT
 public:
     ZPos *zPhasePos[6];
+    int64_t GeneralData[6]={0};
     explicit modbusController(QObject *parent = nullptr);
 private:
     QThread *newThread;
@@ -36,7 +37,7 @@ signals:
 
 public slots:
     void initModbusSlot(char* comModbus);
-    void sendReadRequestSlot(int addr, int startAddr);
+    void sendReadRequestSlot(int addr, int startAddr, quint16 size);
     void sendWriteRequestSlot(int addr, int startAddr, quint16 cnt, QVariant data);
 private slots:
     void modbusReadReady();

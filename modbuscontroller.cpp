@@ -26,10 +26,10 @@ void modbusController::initModbusSlot(char* comModbus)
     else
         qDebug()<<"modbus connection successful";
 }
-void modbusController::sendReadRequestSlot(int addr, int startAddr)
+void modbusController::sendReadRequestSlot(int addr, int startAddr, quint16 size)
 {
     Q_ASSERT(addr>=1 && addr<=6);
-    QModbusDataUnit dataUnit(QModbusDataUnit::HoldingRegisters, startAddr, 2);
+    QModbusDataUnit dataUnit(QModbusDataUnit::HoldingRegisters, startAddr, size);
     if (auto *reply = modbusDevice->sendReadRequest(dataUnit, addr))
     {
         if (!reply->isFinished())
@@ -50,7 +50,7 @@ void modbusController::modbusReadReady()
 
     if (reply->error() == QModbusDevice::NoError)
     {
-        uint tempPos=0;
+        uint64_t tempPos=0;
         const QModbusDataUnit unit = reply->result();
         for (uint i = 0; i < unit.valueCount(); i++)
         {
@@ -60,7 +60,9 @@ void modbusController::modbusReadReady()
             qDebug()<<"modbus receive data: "<<entry;
 #endif
         }
-        zPhasePos[reply->serverAddress()-1]->currentPos=tempPos;
+        if(unit.startAddress() == 4032) //means the returned data is z phase position.
+            zPhasePos[reply->serverAddress()-1]->currentPos = static_cast<uint32_t>(tempPos);
+        GeneralData[reply->serverAddress()-1] = static_cast<int64_t>(tempPos);
     }
 #if __SHOW_MODBUS_RES__
     else if (reply->error() == QModbusDevice::ProtocolError)

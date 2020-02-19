@@ -53,7 +53,7 @@ QVector<double> inverseKinematic::GetLength(double x,double y,double z,double ro
     RZ<<qCos(rotateZ),-qSin(rotateZ),0,
         qSin(rotateZ), qCos(rotateZ),0,
         0,0,1;
-    Eigen::Matrix3d R=RX*RY*RZ;
+    Eigen::Matrix3d R=RZ*RX*RY;
     Eigen::MatrixXd len_arrow(3,6);
     len_arrow=R*P+d-B;
     QVector<double> len_norm;
@@ -68,4 +68,15 @@ stewartPara::stewartPara(double _radiusB, double _radiusP, double _hexSkew, doub
     hexSkew=_hexSkew;
     nomialLength=_nom_l;
     uniJointHeight=_uniH;
+}
+stewartPara::stewartPara(double _radius, double _hexLen, double _nom_l, double uniH)
+{
+    radiusB=radiusP=_radius;
+    nomialLength=_nom_l;
+    uniJointHeight=uniH;
+    hexSkew=M_PI/6 - M_PI/2+qAcos(_hexLen/2/_radius);
+}
+qint64 inverseKinematic::Len2Pulse(double len)
+{
+    return static_cast<int>((len-para->nomialLength))*20;
 }

@@ -8,7 +8,7 @@ QMutex m_mutex;
 QWaitCondition m_cond;
 Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this))
 {
-    stewartPara *para=new stewartPara(10,10, -10*M_PI/180, 80,5);
+    stewartPara *para=new stewartPara(170, 80, 290, 47);
     kinematicModule=new inverseKinematic(para);
     if(GA_Open(1,com_card))
         qDebug()<<"open card failed";
@@ -29,40 +29,7 @@ Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(
         qDebug()<<"one connection established from ip: "<<ip<<" port: "<<port;
         this->tcpClients << tcpClient;
         tcpClient->setParent(this);
-        connect(tcpClient,&QTcpSocket::readyRead,this,[this]()
-        {
-            QTcpSocket *pClient = qobject_cast<QTcpSocket *>(sender());
-            QByteArray array = pClient->readAll();
-            static int state=0;
-            static QVector<double> posData;
-            int dataLen=array.size();
-            for(int i=0;i<dataLen;i++)
-            {
-                if(state==0 && static_cast<uint8_t>(array.at(i))==0xaa)
-                {
-                    posData.clear();
-                    state++;
-                }
-                else if(state==1)
-                {
-                    if(static_cast<uint8_t>(array.at(i))==0xaa)
-                        state++;
-                    else
-                        state=0;
-                }
-                else if(state>=2)
-                {
-                    posData.append(static_cast<uint8_t>(array.at(i)));
-                    state++;
-                    if(state>=8)
-                    {
-                        state=0;
-                        currentX=posData[0];currentY=posData[1];currentZ=posData[2];currentRx=posData[3];currentRy=posData[4];currentRz=posData[5];
-                    }
-                }
-            }
-            //qDebug()<<array;
-        });
+        connect(tcpClient,&QTcpSocket::readyRead,this,&Controller::tcpReadDataSlot);
         connect(tcpClient,&QTcpSocket::disconnected,this,[this]()
         {
             QTcpSocket *pClient = qobject_cast<QTcpSocket *>(sender());
@@ -78,8 +45,9 @@ Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(
     });
 }
 
-void Controller::simpleOperation()
+void Controller::simpleOperationMode()
 {
+    currentStatus=Simple;
     short axis=6;
     if(GA_PrfTrap(axis))
     {
@@ -206,7 +174,7 @@ void Controller::resetAll()
 void Controller::GetZphasePos(int addr)
 {
     m_mutex.lock();
-    emit sendReadRequestSignal(addr,4032);
+    emit sendReadRequestSignal(addr,4032,2);
     m_cond.wait(&m_mutex);
     m_mutex.unlock();
 }
@@ -223,5 +191,107 @@ void Controller::setDriverEnable(int addr, bool value)
 }
 void Controller::GetCurrentPos(int addr)
 {
-
+    m_mutex.lock();
+    emit sendReadRequestSignal(addr,4008,4);
+    m_cond.wait(&m_mutex);
+    m_mutex.unlock();
+}
+void Controller::MoveLegs(QVector<double>& pos)
+{
+    for(int i=1;i<=6;i++)
+    {
+        MoveLeg(i, kinematicModule->Len2Pulse(pos[i-1]-kinematicModule->para->nomialLength));
+        qDebug() << "Leg: "<<i<<" length: "<<kinematicModule->Len2Pulse(pos[i-1]);
+    }
+}
+void Controller::MoveLeg(int addr, qint64 pos)
+{
+    GetCurrentPos(addr);
+    qint64 relatedPos=pos-RS485->GeneralData[addr-1];
+    double currentPos;
+    GA_GetAxisPrfPos(static_cast<short>(addr),&currentPos);
+    GA_SetPos(addr, relatedPos+currentPos);
+    if(GA_Update(0x0001<<(addr-1)))
+    {
+        qDebug()<<"update failed when move leg: "<<addr;
+        GA_Stop(0x0001<<(addr-1),0x0001<<(addr-1));
+    }
+}
+void Controller::initMode(double acc,double dec,double speed)
+{
+    for(short axis=0;axis<6;axis++)
+    {
+        if(GA_PrfTrap(axis))
+        {
+            qDebug()<<"set trap model failed";
+            return;
+        }
+        TTrapPrm trapPrm;
+        if(GA_GetTrapPrm(axis,&trapPrm))
+        {
+            qDebug()<<"read trap model failed";
+            return;
+        }
+        trapPrm.acc=acc;
+        trapPrm.dec=dec;
+        trapPrm.velStart=0;
+        trapPrm.smoothTime=0;
+        if(GA_SetTrapPrm(axis,&trapPrm))
+        {
+            qDebug()<<"set trap params failed";
+            return;
+        }
+        if(GA_SetVel(axis,speed))
+        {
+            qDebug()<<"set speed failed";
+            return;
+        }
+    }
+}
+void Controller::GuiControlMode()
+{
+    currentStatus=GUIControl;
+    initMode();
+    QVector<double> len = kinematicModule->GetLength(0,0,normalZ,0,0,0);
+    //MoveLegs(len);
+}
+void Controller::tcpReadDataSlot()
+{
+    QTcpSocket *pClient = qobject_cast<QTcpSocket *>(sender());
+    QByteArray array = pClient->readAll();
+    static int state=0;
+    static QVector<double> posData;
+    int dataLen=array.size();
+    for(int i=0;i<dataLen;i++)
+    {
+        if(state==0 && static_cast<uint8_t>(array.at(i))==0xaa)
+        {
+            posData.clear();
+            state++;
+        }
+        else if(state==1)
+        {
+            if(static_cast<uint8_t>(array.at(i))==0xaa)
+                state++;
+            else
+                state=0;
+        }
+        else if(state>=2)
+        {
+            posData.append(static_cast<char>(array.at(i)));
+            state++;
+            if(state>=8)
+            {
+                state=0;
+                if(currentStatus==GUIControl)
+                {
+                    currentX=posData[0];currentY=posData[1];currentZ=posData[2]+normalZ;currentRx=posData[3];currentRy=posData[4];currentRz=posData[5];
+                    QVector<double> len = kinematicModule->GetLength(currentX,currentY,currentZ,currentRx,currentRy,currentRz);
+                    //MoveLegs(len);
+                    qDebug()<<currentX<<" "<<currentY<<" "<<currentZ<<" "<<currentRx<<" "<<currentRy<<" "<<currentRz;
+                }
+            }
+        }
+    }
+    //qDebug()<<array;
 }
