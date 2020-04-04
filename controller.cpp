@@ -17,7 +17,7 @@ Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(
     connect(this,&Controller::sendReadRequestSignal,RS485,&modbusController::sendReadRequestSlot);
     connect(this,&Controller::sendWriteRequestSignal,RS485,&modbusController::sendWriteRequestSlot);
     connect(this,&Controller::initModbusSignal,RS485,&modbusController::initModbusSlot);
-    //emit initModbusSignal(com_modbus);
+    emit initModbusSignal(com_modbus);
     //for(int i=1;i<=6;i++)
     //    setDriverEnable(i,true);
     tcpServer->listen(QHostAddress::Any,8088);
@@ -200,8 +200,8 @@ void Controller::MoveLegs(QVector<double>& pos)
 {
     for(int i=1;i<=6;i++)
     {
-        MoveLeg(i, kinematicModule->Len2Pulse(pos[i-1]-kinematicModule->para->nomialLength));
-        qDebug() << "Leg: "<<i<<" length: "<<kinematicModule->Len2Pulse(pos[i-1]);
+        //MoveLeg(i, kinematicModule->Len2Pulse(pos[i-1]-kinematicModule->para->nomialLength));
+        qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
 }
 void Controller::MoveLeg(int addr, qint64 pos)
@@ -253,7 +253,7 @@ void Controller::GuiControlMode()
     currentStatus=GUIControl;
     initMode();
     QVector<double> len = kinematicModule->GetLength(0,0,normalZ,0,0,0);
-    //MoveLegs(len);
+    MoveLegs(len);
 }
 void Controller::tcpReadDataSlot()
 {
@@ -287,8 +287,8 @@ void Controller::tcpReadDataSlot()
                 {
                     currentX=posData[0];currentY=posData[1];currentZ=posData[2]+normalZ;currentRx=posData[3];currentRy=posData[4];currentRz=posData[5];
                     QVector<double> len = kinematicModule->GetLength(currentX,currentY,currentZ,currentRx,currentRy,currentRz);
-                    //MoveLegs(len);
-                    qDebug()<<currentX<<" "<<currentY<<" "<<currentZ<<" "<<currentRx<<" "<<currentRy<<" "<<currentRz;
+                    MoveLegs(len);
+                    qDebug()<<"**********************\nrecieve target:"<<currentX<<currentY<<currentZ-normalZ<<currentRx<<currentRy<<currentRz;
                 }
             }
         }

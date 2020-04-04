@@ -29,6 +29,7 @@ class modbusController : public QObject
 public:
     ZPos *zPhasePos[6];
     int64_t GeneralData[6]={0};
+    QModbusDevice::Error GeneralError[6];
     explicit modbusController(QObject *parent = nullptr);
 private:
     QThread *newThread;

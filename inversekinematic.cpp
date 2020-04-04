@@ -78,5 +78,5 @@ stewartPara::stewartPara(double _radius, double _hexLen, double _nom_l, double u
 }
 qint64 inverseKinematic::Len2Pulse(double len)
 {
-    return static_cast<int>((len-para->nomialLength))*20;
+    return static_cast<int>((len-para->nomialLength))*(1000/10);
 }

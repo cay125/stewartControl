@@ -64,7 +64,6 @@ void modbusController::modbusReadReady()
             zPhasePos[reply->serverAddress()-1]->currentPos = static_cast<uint32_t>(tempPos);
         GeneralData[reply->serverAddress()-1] = static_cast<int64_t>(tempPos);
     }
-#if __SHOW_MODBUS_RES__
     else if (reply->error() == QModbusDevice::ProtocolError)
     {
         QString msg = tr("Read response error: %1 (Mobus exception: 0x%2)").arg(reply->errorString()).arg(reply->rawResult().exceptionCode(), -1, 16);
@@ -74,9 +73,10 @@ void modbusController::modbusReadReady()
     {
         QString msg = tr("Read response error: %1 (code: 0x%2)").arg(reply->errorString()).arg(reply->error(), -1, 16);
         qDebug()<<"error msg: "<<msg;
+        exit(1);
     }
-#endif
     zPhasePos[reply->serverAddress()-1]->error=reply->error();
+    GeneralError[reply->serverAddress()-1]=reply->error();
     reply->deleteLater();
     const QMutexLocker locker(&m_mutex);
     m_cond.wakeOne();
@@ -104,6 +104,7 @@ void modbusController::sendWriteRequestSlot(int addr, int startAddr, quint16 cnt
                     QString msg =  tr("Write response error: %1 (code: 0x%2)").arg(reply->errorString()).arg(reply->error(), -1, 16);
                     qDebug() << "error msg" << msg;
                 }
+                GeneralError[reply->serverAddress()-1]=reply->error();
                 reply->deleteLater();
                 const QMutexLocker locker(&m_mutex);
                 m_cond.wakeOne();
