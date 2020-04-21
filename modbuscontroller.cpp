@@ -54,7 +54,7 @@ void modbusController::modbusReadReady()
         const QModbusDataUnit unit = reply->result();
         for (uint i = 0; i < unit.valueCount(); i++)
         {
-            tempPos=(unit.value(i)<<(16*i))|tempPos;
+            tempPos=((uint64_t)unit.value(i)<<(16*i))|tempPos;
 #if __SHOW_MODBUS_RES__
             const QString entry = tr("Address: %1, Value: %2").arg(unit.startAddress() + i).arg(QString::number(unit.value(i), unit.registerType() <= QModbusDataUnit::Coils ? 10 : 16));
             qDebug()<<"modbus receive data: "<<entry;
@@ -73,7 +73,7 @@ void modbusController::modbusReadReady()
     {
         QString msg = tr("Read response error: %1 (code: 0x%2)").arg(reply->errorString()).arg(reply->error(), -1, 16);
         qDebug()<<"error msg: "<<msg;
-        exit(1);
+        //exit(1);
     }
     zPhasePos[reply->serverAddress()-1]->error=reply->error();
     GeneralError[reply->serverAddress()-1]=reply->error();

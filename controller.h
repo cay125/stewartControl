@@ -25,8 +25,11 @@ public:
     Controller(char* com_card, char* com_modbus, QObject* parent=nullptr);
     void simpleOperationMode();
     void GuiControlMode();
+    void simpleTrajectory();
     void resetAll();
+    void resetAll(int start, int end);
     void setDriverEnable(int addr, bool value);
+    void GetZphasePos(int addr);
     Status currentStatus=GUIControl;
 private:
     QTimer *timer;
@@ -36,7 +39,7 @@ private:
     inverseKinematic *kinematicModule;
     double normalZ=353.57;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
-    void GetZphasePos(int addr);
+    //void GetZphasePos(int addr);
     void GetCurrentPos(int addr);
     void reset(int addr);
     void MoveLegs(QVector<double>& pos);

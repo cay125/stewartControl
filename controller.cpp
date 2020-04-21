@@ -8,7 +8,8 @@ QMutex m_mutex;
 QWaitCondition m_cond;
 Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this))
 {
-    stewartPara *para=new stewartPara(170, 80, 290, 47);
+    //stewartPara *para=new stewartPara(170, 80, 290, 47);
+    stewartPara *para=new stewartPara(170, 80, 280, 47);
     kinematicModule=new inverseKinematic(para);
     if(GA_Open(1,com_card))
         qDebug()<<"open card failed";
@@ -147,21 +148,52 @@ void Controller::reset(int addr)
     m_cond.wait(&m_mutex);
     m_mutex.unlock();
 }
+void Controller::resetAll(int start, int end)
+{
+    for(int i=start;i<=end;i++)
+        reset(i);
+    QVector<int> t(6,0);
+    int cntZros=0;
+    while(true)
+    {
+        for(int i=start;i<=end;i++)
+            GetZphasePos(i);
+        std::cout<<"Current Pos: ";
+        for(int i=start-1;i<end;i++)
+        {
+            std::cout<<"|addr"<<i+1<<" "<<RS485->zPhasePos[i]->GetCurrentPos()<<"| ";
+            if(abs(RS485->zPhasePos[i]->GetCurrentPos())<=50 && t[i]==0)
+            {
+                cntZros++;
+                t[i]=1;
+            }
+        }
+        std::cout<<"\n";
+        if(cntZros==(end-start+1))
+            break;
+        //QThread::msleep(50);
+    }
+    qDebug()<<"Mortor Reset Finished";
+}
 void Controller::resetAll()
 {
     for(int i=1;i<=6;i++)
         reset(i);
+    QVector<int> t(6,0);
+    int cntZros=0;
     while(true)
     {
         for(int i=1;i<=6;i++)
             GetZphasePos(i);
         std::cout<<"Current Pos: ";
-        int cntZros=0;
         for(int i=0;i<6;i++)
         {
             std::cout<<"|addr"<<i+1<<" "<<RS485->zPhasePos[i]->GetCurrentPos()<<"| ";
-            if(RS485->zPhasePos[i]->GetCurrentPos()==0)
+            if(abs(RS485->zPhasePos[i]->GetCurrentPos())<=50 && t[i]==0)
+            {
                 cntZros++;
+                t[i]=1;
+            }
         }
         std::cout<<"\n";
         if(cntZros==6)
@@ -200,7 +232,7 @@ void Controller::MoveLegs(QVector<double>& pos)
 {
     for(int i=1;i<=6;i++)
     {
-        //MoveLeg(i, kinematicModule->Len2Pulse(pos[i-1]-kinematicModule->para->nomialLength));
+        MoveLeg(i, kinematicModule->Len2Pulse(pos[i-1]));
         qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
 }
@@ -208,9 +240,10 @@ void Controller::MoveLeg(int addr, qint64 pos)
 {
     GetCurrentPos(addr);
     qint64 relatedPos=pos-RS485->GeneralData[addr-1];
+    qDebug()<<"pos: "<<pos<<" current pos: "<<RS485->GeneralData[addr-1]<<"related pos: "<<relatedPos<<"\n";
     double currentPos;
     GA_GetAxisPrfPos(static_cast<short>(addr),&currentPos);
-    GA_SetPos(addr, relatedPos+currentPos);
+    GA_SetPos(addr, currentPos-relatedPos);
     if(GA_Update(0x0001<<(addr-1)))
     {
         qDebug()<<"update failed when move leg: "<<addr;
@@ -219,7 +252,7 @@ void Controller::MoveLeg(int addr, qint64 pos)
 }
 void Controller::initMode(double acc,double dec,double speed)
 {
-    for(short axis=0;axis<6;axis++)
+    for(short axis=1;axis<=6;axis++)
     {
         if(GA_PrfTrap(axis))
         {
@@ -251,7 +284,7 @@ void Controller::initMode(double acc,double dec,double speed)
 void Controller::GuiControlMode()
 {
     currentStatus=GUIControl;
-    initMode();
+    initMode(2,2,5);
     QVector<double> len = kinematicModule->GetLength(0,0,normalZ,0,0,0);
     MoveLegs(len);
 }
@@ -294,4 +327,30 @@ void Controller::tcpReadDataSlot()
         }
     }
     //qDebug()<<array;
+}
+void Controller::simpleTrajectory()
+{
+    qDebug()<<"enter simple trajectory mode\n";
+    double diff_height=20;
+    double x_amp=60;
+    bool dir=true;
+    auto lens=kinematicModule->GetLength(0,0,normalZ+diff_height,0,0,0);
+    MoveLegs(lens);
+    QThread::sleep(1);
+    while(true)
+    {
+        if(dir)
+        {
+            auto lens=kinematicModule->GetLength(x_amp,0,normalZ+diff_height,0,0,0);
+            MoveLegs(lens);
+            dir=false;
+        }
+        else
+        {
+            auto lens=kinematicModule->GetLength(-x_amp,0,normalZ+diff_height,0,0,0);
+            MoveLegs(lens);
+            dir=true;
+        }
+        QThread::sleep(2);
+    }
 }

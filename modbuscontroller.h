@@ -7,7 +7,7 @@
 #include <QVector>
 #include <QVariant>
 
-#define __SHOW_MODBUS_RES__ 1
+#define __SHOW_MODBUS_RES__ 0
 
 class ZPos
 {
