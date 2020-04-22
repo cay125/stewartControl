@@ -235,8 +235,9 @@ void Controller::MoveLegs(QVector<double>& pos)
         MoveLeg(i, kinematicModule->Len2Pulse(pos[i-1]));
         qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
+    updateAxis(1,6);
 }
-void Controller::MoveLeg(int addr, qint64 pos)
+void Controller::MoveLeg(int addr, qint64 pos, bool flag)
 {
     GetCurrentPos(addr);
     qint64 relatedPos=pos-RS485->GeneralData[addr-1];
@@ -244,11 +245,22 @@ void Controller::MoveLeg(int addr, qint64 pos)
     double currentPos;
     GA_GetAxisPrfPos(static_cast<short>(addr),&currentPos);
     GA_SetPos(addr, currentPos-relatedPos);
-    if(GA_Update(0x0001<<(addr-1)))
+    if(flag)
     {
-        qDebug()<<"update failed when move leg: "<<addr;
-        GA_Stop(0x0001<<(addr-1),0x0001<<(addr-1));
+        if(GA_Update(0x0001<<(addr-1)))
+        {
+            qDebug()<<"update failed when move leg: "<<addr;
+            GA_Stop(0x0001<<(addr-1),0x0001<<(addr-1));
+        }
     }
+}
+void Controller::updateAxis(int start, int end)
+{
+    uint8_t val=0;
+    for(int i=start;i<=end;i++)
+        val=val|(0x0001<<(i-1));
+    if(GA_Update(val))
+        qDebug()<<"update failed when move legs";
 }
 void Controller::initMode(double acc,double dec,double speed)
 {

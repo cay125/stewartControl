@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
     //controller.simpleOperationMode();
     controller.resetAll();
     controller.GuiControlMode();
-    //controller.simpleTrajectory();
+    controller.simpleTrajectory();
     qDebug()<<"enter qt event loop";
     return a.exec();
 }

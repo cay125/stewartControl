@@ -43,7 +43,8 @@ private:
     void GetCurrentPos(int addr);
     void reset(int addr);
     void MoveLegs(QVector<double>& pos);
-    void MoveLeg(int addr, qint64 pos);
+    void MoveLeg(int addr, qint64 pos, bool flag=false);
+    void updateAxis(int start, int end);
     void initMode(double acc=1,double dec=1,double speed=1);
 private slots:
     void timerSlot();
