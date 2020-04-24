@@ -25,7 +25,7 @@ public:
     Controller(char* com_card, char* com_modbus, QObject* parent=nullptr);
     void simpleOperationMode();
     void GuiControlMode();
-    void simpleTrajectory();
+    void simpleTrajectory(int mode=0);
     void resetAll();
     void resetAll(int start, int end);
     void setDriverEnable(int addr, bool value);

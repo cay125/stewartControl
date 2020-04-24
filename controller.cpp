@@ -198,7 +198,7 @@ void Controller::resetAll()
         std::cout<<"\n";
         if(cntZros==6)
             break;
-        QThread::msleep(50);
+        //QThread::msleep(50);
     }
     qDebug()<<"Mortor Reset Finished";
 }
@@ -340,7 +340,7 @@ void Controller::tcpReadDataSlot()
     }
     //qDebug()<<array;
 }
-void Controller::simpleTrajectory()
+void Controller::simpleTrajectory(int mode)
 {
     qDebug()<<"enter simple trajectory mode\n";
     double diff_height=20;
@@ -349,20 +349,42 @@ void Controller::simpleTrajectory()
     auto lens=kinematicModule->GetLength(0,0,normalZ+diff_height,0,0,0);
     MoveLegs(lens);
     QThread::sleep(1);
+    int cnt=0,total=30;
     while(true)
     {
-        if(dir)
+        if(mode==0)
         {
-            auto lens=kinematicModule->GetLength(x_amp,0,normalZ+diff_height,0,0,0);
-            MoveLegs(lens);
-            dir=false;
+            if(dir)
+            {
+                auto lens=kinematicModule->GetLength(x_amp,0,normalZ+diff_height,0,0,0);
+                MoveLegs(lens);
+                dir=false;
+            }
+            else
+            {
+                auto lens=kinematicModule->GetLength(-x_amp,0,normalZ+diff_height,0,0,0);
+                MoveLegs(lens);
+                dir=true;
+            }
+            QThread::sleep(2);
         }
-        else
+        else if(mode==1)
         {
-            auto lens=kinematicModule->GetLength(-x_amp,0,normalZ+diff_height,0,0,0);
+            auto lens=kinematicModule->GetLength(x_amp/total*cnt,0,normalZ+diff_height,0,0,0);
             MoveLegs(lens);
-            dir=true;
+            if(dir)
+            {
+                cnt++;
+                if(cnt>total)
+                    dir=false;
+            }
+            else
+            {
+                cnt--;
+                if(cnt<-total)
+                    dir=true;
+            }
+            QThread::msleep(10);
         }
-        QThread::sleep(2);
     }
 }
