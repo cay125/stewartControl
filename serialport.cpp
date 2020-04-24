@@ -1,22 +1,24 @@
 #include "serialport.h"
 #include <QSerialPortInfo>
+#include <utility>
 SerialPort::SerialPort(QObject *parent) : QObject(parent)
 {
-    my_thread = new QThread();
+    worker_thread = new QThread();
     port = new QSerialPort();
-    this->moveToThread(my_thread);
-    port->moveToThread(my_thread);
-    my_thread->start();
+    this->moveToThread(worker_thread);
+    port->moveToThread(worker_thread);
+    worker_thread->start();
     buildTableCRC16();
+    //qDebug()<<"main thread id: "<<QThread::currentThreadId();
 }
 
 SerialPort::~SerialPort()
 {
     port->close();
     port->deleteLater();
-    my_thread->quit();
-    my_thread->wait();
-    my_thread->deleteLater();
+    worker_thread->quit();
+    worker_thread->wait();
+    worker_thread->deleteLater();
 }
 
 void SerialPort::init_port()
@@ -39,13 +41,13 @@ void SerialPort::start_port(QString portname, int baudrate, int parity)
         port->setParity(QSerialPort::NoParity);
     if (port->open(QIODevice::ReadWrite))
     {
-        qDebug() << "Port have been opened";
+        qDebug() << "open uart successful";
         connect(port, SIGNAL(readyRead()), this, SLOT(handle_data())); //Qt::DirectConnection
         emit connected();
     }
     else
     {
-        qDebug() << "open it failed";
+        qDebug() << "open uart failed";
     }
 }
 void SerialPort::stop_port()
@@ -101,11 +103,51 @@ uint16_t SerialPort::calcCRC16()
 
 void SerialPort::handle_data()
 {
-
+    static std::pair<int,recieveType> state(0, recieveType::angle);
+    auto data=port->readAll();
+    //qDebug()<<"worker thread id: "<<QThread::currentThreadId();
+    for(int i=0;i<data.size();i++)
+    {
+        uchar num=static_cast<uchar>(data.at(i));
+        if(state.first==0 && num==0x55)
+        {
+            pointData.clear();
+            state.first=1;
+        }
+        else if(state.first==1)
+        {
+            if(num!=0x52 && num!=0x53)
+            {
+                state.first=0;
+            }
+            else if(num==0x52)
+            {
+                state.first++;
+                pointData.append(recieveType::gyro);
+                state.second=recieveType::gyro;
+            }
+            else if(num==0x53)
+            {
+                state.first++;
+                pointData.append(recieveType::angle);
+                state.second=recieveType::angle;
+            }
+        }
+        else if(state.first>1)
+        {
+            state.first++;
+            pointData.append(data.at(i));
+            if(state.first>=8)
+            {
+                state.first=0;
+                emit receive_data(pointData);
+            }
+        }
+    }
 }
 
 void SerialPort::write_data()
 {
     qDebug() << "write_id is:" << QThread::currentThreadId();
-    port->write("data", 4);   //发送“data”字符
+    port->write("data", 4);
 }

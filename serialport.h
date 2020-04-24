@@ -10,6 +10,10 @@
 #include <QThread>
 #include <QString>
 
+enum recieveType
+{
+    gyro='0',angle
+};
 
 class SerialPort : public QObject
 {
@@ -23,7 +27,7 @@ public:
 public slots:
   void handle_data();
   void write_data();
-  void start_port(QString,int,int);
+  void start_port(QString portname, int baudrate, int parity);
   void stop_port();
 
 signals:
@@ -32,10 +36,8 @@ signals:
 
 private:
   QByteArray pointData;
-  QVector<int> PData;
-  QThread *my_thread;
+  QThread *worker_thread;
   QSerialPort *port;
-  int currentTarget=0;
   const unsigned short crc16_table[256] = {
   0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf,
   0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7,

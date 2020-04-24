@@ -21,7 +21,8 @@ SOURCES += \
         controller.cpp \
         inversekinematic.cpp \
         main.cpp \
-        modbuscontroller.cpp
+        modbuscontroller.cpp \
+        serialport.cpp
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -32,7 +33,8 @@ HEADERS += \
     GAS_N.h \
     controller.h \
     inversekinematic.h \
-    modbuscontroller.h
+    modbuscontroller.h \
+    serialport.h
 
 INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/
 

@@ -6,7 +6,7 @@
 #include "GAS_N.h"
 QMutex m_mutex;
 QWaitCondition m_cond;
-Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this))
+Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort)
 {
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
     stewartPara *para=new stewartPara(170, 80, 280, 47);
@@ -15,9 +15,12 @@ Controller::Controller(char* com_card,char* com_modbus,QObject* parent):QObject(
         qDebug()<<"open card failed";
     else
         qDebug()<<"open card successful";
+    connect(this,&Controller::startUartSignal,uart,&SerialPort::start_port);
+    connect(uart,&SerialPort::receive_data,this,&Controller::updatePosition);
     connect(this,&Controller::sendReadRequestSignal,RS485,&modbusController::sendReadRequestSlot);
     connect(this,&Controller::sendWriteRequestSignal,RS485,&modbusController::sendWriteRequestSlot);
     connect(this,&Controller::initModbusSignal,RS485,&modbusController::initModbusSlot);
+    emit startUartSignal(QString(com_imu),115200,2);
     emit initModbusSignal(com_modbus);
     //for(int i=1;i<=6;i++)
     //    setDriverEnable(i,true);
@@ -386,5 +389,21 @@ void Controller::simpleTrajectory(int mode)
             }
             QThread::msleep(10);
         }
+    }
+}
+void Controller::updatePosition(QByteArray data)
+{
+    auto type=static_cast<recieveType>(data.at(0));
+    if(type==recieveType::angle)
+    {
+        angleX=static_cast<int16_t>(((static_cast<uint8_t>(data.at(2))<<8)|static_cast<uint8_t>(data.at(1))))/32768.0*180.0;
+        angleY=static_cast<int16_t>(((static_cast<uint8_t>(data.at(4))<<8)|static_cast<uint8_t>(data.at(3))))/32768.0*180.0;
+        angleZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*180.0;
+    }
+    else if(type==recieveType::gyro)
+    {
+        gyroX=static_cast<int16_t>(((static_cast<uint8_t>(data.at(2))<<8)|static_cast<uint8_t>(data.at(1))))/32768.0*2000.0;
+        gyroY=static_cast<int16_t>(((static_cast<uint8_t>(data.at(4))<<8)|static_cast<uint8_t>(data.at(3))))/32768.0*2000.0;
+        gyroZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*2000.0;
     }
 }

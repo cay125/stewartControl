@@ -2,6 +2,7 @@
 #define CONTROLLER_H
 
 #include "modbuscontroller.h"
+#include "serialport.h"
 #include "inversekinematic.h"
 #include <QString>
 #include <QTimer>
@@ -22,10 +23,10 @@ class Controller : public QObject
 {
     Q_OBJECT
 public:
-    Controller(char* com_card, char* com_modbus, QObject* parent=nullptr);
+    Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent=nullptr);
     void simpleOperationMode();
     void GuiControlMode();
-    void simpleTrajectory(int mode=0);
+    [[noreturn]] void simpleTrajectory(int mode=0);
     void resetAll();
     void resetAll(int start, int end);
     void setDriverEnable(int addr, bool value);
@@ -37,7 +38,9 @@ private:
     QTcpServer *tcpServer;
     QList<QTcpSocket *>tcpClients;
     inverseKinematic *kinematicModule;
+    SerialPort* uart;
     double normalZ=353.57;
+    double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
     //void GetZphasePos(int addr);
     void GetCurrentPos(int addr);
@@ -45,6 +48,7 @@ private:
     void MoveLegs(QVector<double>& pos);
     void MoveLeg(int addr, qint64 pos, bool flag=false);
     void updateAxis(int start, int end);
+    void updatePosition(QByteArray);
     void initMode(double acc=1,double dec=1,double speed=1);
 private slots:
     void timerSlot();
@@ -53,5 +57,6 @@ signals:
     void sendReadRequestSignal(int addr, int startAddr, quint16 size);
     void sendWriteRequestSignal(int addr, int startAddr, int cnt, QVariant data);
     void initModbusSignal(char* comModbus);
+    void startUartSignal(QString portname,int boudrate,int parity);
 };
 #endif // CONTROLLER_H
