@@ -47,6 +47,12 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
             }
         });
     });
+    legIndex2Motion[0]=1;
+    legIndex2Motion[1]=6;
+    legIndex2Motion[2]=5;
+    legIndex2Motion[3]=4;
+    legIndex2Motion[4]=3;
+    legIndex2Motion[5]=2;
 }
 
 void Controller::simpleOperationMode()
@@ -235,7 +241,7 @@ void Controller::MoveLegs(QVector<double>& pos)
 {
     for(int i=1;i<=6;i++)
     {
-        MoveLeg(i, kinematicModule->Len2Pulse(pos[i-1]));
+        MoveLeg(legIndex2Motion[i-1], kinematicModule->Len2Pulse(pos[i-1]));
         qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
     updateAxis(1,6);

@@ -13,6 +13,7 @@
 #include <QWaitCondition>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <map>
 
 extern QMutex m_mutex;
 extern QWaitCondition m_cond;
@@ -39,6 +40,7 @@ private:
     QList<QTcpSocket *>tcpClients;
     inverseKinematic *kinematicModule;
     SerialPort* uart;
+    std::map<int,int> legIndex2Motion;
     double normalZ=353.57;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
