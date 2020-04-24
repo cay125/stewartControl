@@ -34,6 +34,6 @@ HEADERS += \
     inversekinematic.h \
     modbuscontroller.h
 
-INCLUDEPATH += C:/Users/xiang/Downloads/eigen-eigen-323c052e1731/
+INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/
 
 LIBS += ../stewartControl/GAS.lib
