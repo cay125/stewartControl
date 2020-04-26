@@ -15,10 +15,12 @@
 #include <QTcpSocket>
 #include <map>
 
+#define FEEDBACK_FROM_MORTOR 0
+
 extern QMutex m_mutex;
 extern QWaitCondition m_cond;
 
-enum Status{Simple,GUIControl,InetialControl};
+enum Status{Simple,GUIControl,IMUControl};
 
 class Controller : public QObject
 {
@@ -27,6 +29,7 @@ public:
     Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent=nullptr);
     void simpleOperationMode();
     void GuiControlMode();
+    [[noreturn]] void IMUControlMode();
     [[noreturn]] void simpleTrajectory(int mode=0);
     void resetAll();
     void resetAll(int start, int end);
@@ -41,7 +44,7 @@ private:
     inverseKinematic *kinematicModule;
     SerialPort* uart;
     std::map<int,int> legIndex2Motion;
-    double normalZ=353.57;
+    double normalZ=353.57+20;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
     //void GetZphasePos(int addr);

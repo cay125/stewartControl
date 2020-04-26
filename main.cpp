@@ -8,11 +8,11 @@ int main(int argc, char *argv[])
     qDebug() << "Program Start\nusing serial: controlCard:"<<argv[1]<<",modBus:"<<argv[2]<<",imu:"<<argv[3];
     qDebug() << "**********************************************";
     Controller controller(argv[1], argv[2], argv[3]);
-    //controller.GetZphasePos(1);
     //controller.simpleOperationMode();
     controller.resetAll();
+    //controller.IMUControlMode();
     controller.GuiControlMode();
-    controller.simpleTrajectory();
+    //controller.simpleTrajectory(0);
     qDebug() << "enter qt event loop";
     return a.exec();
 }

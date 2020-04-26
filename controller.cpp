@@ -57,7 +57,7 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
 
 void Controller::simpleOperationMode()
 {
-    currentStatus=Simple;
+    currentStatus=Status::Simple;
     short axis=6;
     if(GA_PrfTrap(axis))
     {
@@ -187,7 +187,10 @@ void Controller::resetAll(int start, int end)
 void Controller::resetAll()
 {
     for(int i=1;i<=6;i++)
+    {
         reset(i);
+        GA_ZeroPos(i,1);
+    }
     QVector<int> t(6,0);
     int cntZros=0;
     while(true)
@@ -248,12 +251,17 @@ void Controller::MoveLegs(QVector<double>& pos)
 }
 void Controller::MoveLeg(int addr, qint64 pos, bool flag)
 {
+#if FEEDBACK_FROM_MORTOR
     GetCurrentPos(addr);
     qint64 relatedPos=pos-RS485->GeneralData[addr-1];
-    qDebug()<<"pos: "<<pos<<" current pos: "<<RS485->GeneralData[addr-1]<<"related pos: "<<relatedPos<<"\n";
+    qDebug()<<"pos: "<<pos<<" current pos: "<<RS485->GeneralData[addr-1]<<"related pos: "<<relatedPos;
     double currentPos;
     GA_GetAxisPrfPos(static_cast<short>(addr),&currentPos);
+    qDebug()<<"read from card: "<<currentPos;
     GA_SetPos(addr, currentPos-relatedPos);
+#else
+    GA_SetPos(addr, -pos);
+#endif
     if(flag)
     {
         if(GA_Update(0x0001<<(addr-1)))
@@ -304,10 +312,50 @@ void Controller::initMode(double acc,double dec,double speed)
 }
 void Controller::GuiControlMode()
 {
-    currentStatus=GUIControl;
+    currentStatus=Status::GUIControl;
     initMode(2,2,5);
     QVector<double> len = kinematicModule->GetLength(0,0,normalZ,0,0,0);
     MoveLegs(len);
+}
+void Controller::IMUControlMode()
+{
+    currentStatus=Status::IMUControl;
+    initMode(2,2,5);
+    QVector<double> lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
+    qDebug()<<"start move legs home";
+    MoveLegs(lens);
+    short axis=1;
+    long status=0;
+    while(axis<=6)
+    {
+        if(GA_GetSts(axis,&status))
+        {
+            qDebug()<<"read status failed";
+            GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
+        }
+        if(status & AXIS_STATUS_RUNNING)
+            QThread::msleep(10);
+        else
+            axis++;
+    }
+    qDebug()<<"move home finished";
+    connect(timer,&QTimer::timeout,this,[this]()
+    {
+        qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
+        if(qFabs(angleX)<1 && qFabs(angleY)<1)
+        {
+            auto lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
+            MoveLegs(lens);
+            QThread::msleep(50);
+        }
+        else
+        {
+            auto lens = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
+            MoveLegs(lens);
+        }
+    });
+    timer->setInterval(20);
+    timer->start();
 }
 void Controller::tcpReadDataSlot()
 {
@@ -412,4 +460,5 @@ void Controller::updatePosition(QByteArray data)
         gyroY=static_cast<int16_t>(((static_cast<uint8_t>(data.at(4))<<8)|static_cast<uint8_t>(data.at(3))))/32768.0*2000.0;
         gyroZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*2000.0;
     }
+    //qDebug()<<angleX<<" "<<angleY<<" "<<angleZ;
 }
