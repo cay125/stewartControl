@@ -36,6 +36,8 @@
 #define AXIS_STATUS_HOME_SUCESS	        (0x00002000)	//回零成功
 #define AXIS_STATUS_HOME_SWITCH			(0x00004000)	//零位信号
 #define AXIS_STATUS_INDEX				(0x00008000)    //z索引信号
+#define AXIS_STATUS_GEAR_START  		(0x00010000)    //电子齿轮开始啮合
+#define AXIS_STATUS_GEAR_FINISH         (0x00020000)    //电子齿轮完成啮合
 
 //输入IO类型宏定义
 #define MC_LIMIT_POSITIVE               0
@@ -87,9 +89,12 @@
 #define FOLLOW_EVENT_START              1
 #define FOLLOW_EVENT_PASS               2
 
-#define GEAR_EVENT_START                1
-#define GEAR_EVENT_PASS                 2
-#define GEAR_EVENT_AREA                 5
+//电子齿轮启动事件定义
+#define GEAR_EVENT_IMMED                1//立即启动电子齿轮
+#define GEAR_EVENT_BIG_EQU              2//主轴规划或者编码器位置大于等于指定数值时启动电子齿轮
+#define GEAR_EVENT_SMALL_EQU            3//主轴规划或者编码器位置小于等于指定数值时启动电子齿轮
+#define GEAR_EVENT_IO_ON                4//指定IO为ON时启动电子齿轮
+#define GEAR_EVENT_IO_OFF               5//指定IO为OFF时启动电子齿轮
 
 #define FOLLOW_SEGMENT_NORMAL           0
 #define FOLLOW_SEGMENT_EVEN             1
@@ -188,12 +193,12 @@ typedef struct JogPrm
 typedef struct _CrdPrm
 {
     short dimension;                              // 坐标系维数
-    short profile[AXIS_MAX];                      // 关联profile和坐标轴(从1开始)
+    short profile[8];                      // 关联profile和坐标轴(从1开始)
     double synVelMax;                             // 最大合成速度
     double synAccMax;                             // 最大合成加速度
     short evenTime;                               // 最小匀速时间
     short setOriginFlag;                          // 设置原点坐标值标志,0:默认当前规划位置为原点位置;1:用户指定原点位置
-    long originPos[AXIS_MAX];                     // 用户指定的原点位置
+    long originPos[8];                     // 用户指定的原点位置
 }TCrdPrm;
 
 //命令类型
@@ -313,7 +318,7 @@ typedef struct CrdBufOperation
 {
     short flag;                                   // 标志该插补段是否含有IO和延时
     unsigned short delay;                         // 延时时间
-    short doType;                                 // 缓存区IO的类型,0:不输出IO
+    short nDoType;                                 // 缓存区IO的类型,0:不输出IO
     unsigned short doMask;                        // 缓存区IO的输出控制掩码
     unsigned short doValue;                       // 缓存区IO的输出值
     unsigned short dataExt[CRD_OPERATION_DATA_EXT_MAX];     // 辅助操作扩展数据
@@ -342,6 +347,8 @@ GA_API int GA_GetVersion(char *pVersion);
 GA_API int GA_SetPrfPos(short profile,long prfPos);
 GA_API int GA_SynchAxisPos(long mask);
 GA_API int GA_ZeroPos(short nAxisNum,short nCount=1);
+GA_API int GA_SetAxisBand(short nAxisNum,long lBand,long lTime);
+GA_API int GA_GetAxisBand(short nAxisNum,long *pBand,long *pTime);
 
 //系统配置信息
 GA_API int GA_AlarmOn(short nAxisNum);
@@ -363,8 +370,8 @@ GA_API int GA_StepSns(unsigned short sense);
 GA_API int GA_GetStepSns(short *pSense);
 GA_API int GA_EncSns(unsigned short sense);
 GA_API int GA_GetEncSns(short *pSense);
-GA_API int GA_EncOn(short nEncoder);
-GA_API int GA_EncOff(short nEncoder);
+GA_API int GA_EncOn(short nEncoderNum);
+GA_API int GA_EncOff(short nEncoderNum);
 GA_API int GA_GetEncOnOff(short nAxisNum,short *pEncOnOff);
 GA_API int GA_SetPosErr(short nAxisNum,long lError);
 GA_API int GA_GetPosErr(short nAxisNum,long *pError);
@@ -396,49 +403,72 @@ GA_API int GA_AxisOff(short nAxisNum);
 //点位运动指令列表（包括点位和速度模式）
 GA_API int GA_PrfTrap(short nAxisNum);
 GA_API int GA_SetTrapPrm(short nAxisNum,TTrapPrm *pPrm);
+GA_API int GA_SetTrapPrmSingle(short nAxisNum,double dAcc,double dDec,double dVelStart,short  dSmoothTime);
 GA_API int GA_GetTrapPrm(short nAxisNum,TTrapPrm *pPrm);
+GA_API int GA_GetTrapPrmSingle(short nAxisNum,double* dAcc,double* dDec,double* dVelStart,short*  dSmoothTime);
 GA_API int GA_PrfJog(short nAxisNum);
 GA_API int GA_SetJogPrm(short nAxisNum,TJogPrm *pPrm);
+GA_API int GA_SetJogPrmSingle(short nAxisNum,double dAcc,double dDec,double dSmooth);
 GA_API int GA_GetJogPrm(short nAxisNum,TJogPrm *pPrm);
+GA_API int GA_GetJogPrmSingle(short nAxisNum,double* dAcc,double* dDec,double* dSmooth);
 GA_API int GA_SetPos(short nAxisNum,long pos);
 GA_API int GA_GetPos(short nAxisNum,long *pPos);
 GA_API int GA_SetVel(short nAxisNum,double vel);
 GA_API int GA_GetVel(short nAxisNum,double *pVel);
 GA_API int GA_Update(long mask);
 
+//电子齿轮模式指令列表
+GA_API int GA_PrfGear(short nAxisNum,short dir=0);
+GA_API int GA_SetGearMaster(short nAxisNum,short nMasterAxisNum,short masterType=GEAR_MASTER_PROFILE);
+GA_API int GA_GetGearMaster(short nAxisNum,short *nMasterAxisNum,short *pMasterType=NULL);
+GA_API int GA_SetGearRatio(short nAxisNum,long masterEven,long slaveEven,long masterSlope=0,long lStopSmoothTime = 200);
+GA_API int GA_GetGearRatio(short nAxisNum,long *pMasterEven,long *pSlaveEven,long *pMasterSlope=NULL,long *pStopSmoothTime=NULL);
+GA_API int GA_GearStart(long mask);
+GA_API int GA_GearStop(long mask);
+GA_API int GA_SetGearEvent(short nAxisNum,short nEvent,double startPara0,double startPara1);
+GA_API int GA_GetGearEvent(short nAxisNum,short *pEvent,double *pStartPara0,double *pStartPara1);
+
+//PT模式指令列表
+GA_API int GA_PrfPt(short nAxisNum,short mode=PT_MODE_STATIC);
+GA_API int GA_PtSpace(short nAxisNum,long *pSpace,short nCount);
+GA_API int GA_PtRemain(short nAxisNum,long *pRemainSpace,short nCount);
+GA_API int GA_PtData(short nAxisNum,short* pData,long lLength,double dDataID);
+GA_API int GA_PtClear(long lAxisMask);
+GA_API int GA_PtStart(long lAxisMask);
+
 //插补运动模式指令列表
 GA_API int GA_SetCrdPrm(short nCrdNum,TCrdPrm *pCrdPrm);
 GA_API int GA_GetCrdPrm(short nCrdNum,TCrdPrm *pCrdPrm);
-GA_API int GA_InitLookAhead(short nCrdNum,short fifo,TLookAheadPrm* plookAheadPara);
-GA_API int GA_CrdClear(short nCrdNum,short fifo);
-GA_API int GA_LnXY(short nCrdNum,long x,long y,double synVel,double synAcc,double velEnd=0,short fifo=0,long segNum = 0);
-GA_API int GA_LnXYZ(short nCrdNum,long x,long y,long z,double synVel,double synAcc,double velEnd=0,short fifo=0,long segNum = 0);
-GA_API int GA_ArcXYC(short nCrdNum,long x,long y,double xCenter,double yCenter,short circleDir,double synVel,double synAcc,double velEnd=0,short fifo=0,long segNum = 0);
-GA_API int GA_ArcXZC(short nCrdNum,long x,long z,double xCenter,double zCenter,short circleDir,double synVel,double synAcc,double velEnd=0,short fifo=0,long segNum = 0);
-GA_API int GA_ArcYZC(short nCrdNum,long y,long z,double yCenter,double zCenter,short circleDir,double synVel,double synAcc,double velEnd=0,short fifo=0,long segNum = 0);
-GA_API int GA_BufIO(short nCrdNum,unsigned short doType,unsigned short nCardIndex,unsigned short doMask,unsigned short doValue,short fifo=0,long segNum = 0);
-GA_API int GA_BufDelay(short nCrdNum,unsigned long ulDelayTime,short fifo=0,long segNum = 0);
-GA_API int GA_CrdData(short nCrdNum,void *pCrdData,short fifo=0);
+GA_API int GA_InitLookAhead(short nCrdNum,short FifoIndex,TLookAheadPrm* plookAheadPara);
+GA_API int GA_CrdClear(short nCrdNum,short FifoIndex);
+GA_API int GA_LnXY(short nCrdNum,long x,long y,double synVel,double synAcc,double velEnd=0,short FifoIndex=0,long segNum = 0);
+GA_API int GA_LnXYZ(short nCrdNum,long x,long y,long z,double synVel,double synAcc,double velEnd=0,short FifoIndex=0,long segNum = 0);
+GA_API int GA_ArcXYC(short nCrdNum,long x,long y,double xCenter,double yCenter,short circleDir,double synVel,double synAcc,double velEnd=0,short FifoIndex=0,long segNum = 0);
+GA_API int GA_ArcXZC(short nCrdNum,long x,long z,double xCenter,double zCenter,short circleDir,double synVel,double synAcc,double velEnd=0,short FifoIndex=0,long segNum = 0);
+GA_API int GA_ArcYZC(short nCrdNum,long y,long z,double yCenter,double zCenter,short circleDir,double synVel,double synAcc,double velEnd=0,short FifoIndex=0,long segNum = 0);
+GA_API int GA_BufIO(short nCrdNum,unsigned short nDoType,unsigned short nCardIndex,unsigned short doMask,unsigned short doValue,short FifoIndex=0,long segNum = 0);
+GA_API int GA_BufDelay(short nCrdNum,unsigned long ulDelayTime,short FifoIndex=0,long segNum = 0);
+GA_API int GA_CrdData(short nCrdNum,void *pCrdData,short FifoIndex=0);
 GA_API int GA_CrdStart(short mask,short option);
 GA_API int GA_SetOverride(short nCrdNum,double synVelRatio);
 GA_API int GA_GetCrdPos(short nCrdNum,double *pPos);
-GA_API int GA_CrdSpace(short nCrdNum,long *pSpace,short fifo=0);
-GA_API int GA_CrdStatus(short nCrdNum,short *pRun,long *pSegment,short fifo=0);
-GA_API int GA_SetUserSegNum(short nCrdNum,long segNum,short fifo=0);
-GA_API int GA_GetUserSegNum(short nCrdNum,long *pSegment,short fifo=0);
-GA_API int GA_GetRemainderSegNum(short nCrdNum,long *pSegment,short fifo=0);
+GA_API int GA_CrdSpace(short nCrdNum,long *pSpace,short FifoIndex=0);
+GA_API int GA_CrdStatus(short nCrdNum,short *pRun,long *pSegment,short FifoIndex=0);
+GA_API int GA_SetUserSegNum(short nCrdNum,long segNum,short FifoIndex=0);
+GA_API int GA_GetUserSegNum(short nCrdNum,long *pSegment,short FifoIndex=0);
+GA_API int GA_GetRemainderSegNum(short nCrdNum,long *pSegment,short FifoIndex=0);
 GA_API int GA_GetLookAheadSpace(short nCrdNum,long *pSpace,short nFifoIndex=0);
 
 //访问硬件资源指令列表
-GA_API int GA_GetDi(short diType,long *pValue);
-GA_API int GA_GetDiRaw(short diType,long *pValue);
-GA_API int GA_SetDo(short doType,long value);
-GA_API int GA_SetDoBit(short doType,short nDoNum,short value);
-GA_API int GA_SetDoBitReverse(short doType,short nDoNum,long value,short reverseTime);
-GA_API int GA_GetDo(short doType,long *pValue);
-GA_API int GA_GetEncPos(short encoder,double *pValue,short nCount=1,unsigned long *pClock=NULL);
-GA_API int GA_GetEncVel(short encoder,double *pValue,short nCount=1,unsigned long *pClock=NULL);
-GA_API int GA_SetEncPos(short encoder,long encPos);
+GA_API int GA_GetDi(short nDiType,long *pValue);
+GA_API int GA_GetDiRaw(short nDiType,long *pValue);
+GA_API int GA_SetDo(short nDoType,long value);
+GA_API int GA_SetDoBit(short nDoType,short nDoNum,short value);
+GA_API int GA_SetDoBitReverse(short nDoType,short nDoNum,long value,short reverseTime);
+GA_API int GA_GetDo(short nDoType,long *pValue);
+GA_API int GA_GetEncPos(short nEncodeNum,double *pValue,short nCount=1,unsigned long *pClock=NULL);
+GA_API int GA_GetEncVel(short nEncodeNum,double *pValue,short nCount=1,unsigned long *pClock=NULL);
+GA_API int GA_SetEncPos(short nEncodeNum,long encPos);
 GA_API int GA_SetExtDoValue(short nCardIndex,unsigned long *value,short nCount=1);
 GA_API int GA_GetExtDiValue(short nCardIndex,unsigned long *pValue,short nCount=1);
 GA_API int GA_GetExtDoValue(short nCardIndex,unsigned long *pValue,short nCount=1);
@@ -446,17 +476,36 @@ GA_API int GA_SetExtDoBit(short nCardIndex,short nBitIndex,unsigned short nValue
 GA_API int GA_GetExtDiBit(short nCardIndex,short nBitIndex,unsigned short *pValue);
 GA_API int GA_GetExtDoBit(short nCardIndex,short nBitIndex,unsigned short *pValue);
 
+//比较输出指令
+GA_API int GA_CmpPluse(short nChannel, short nPluseType1, short nPluseType2, short nTime1,short nTime2);
+GA_API int GA_CmpBufSetChannel(short nBuf1ChannelNum,short nBuf2ChannelNum);
+GA_API int GA_CmpBufData(short nCmpEncodeNum, short nPluseType, short nStartLevel, short nTime, long *pBuf1, short nBufLen1, long *pBuf2, short nBufLen2,short nAbsPosFlag=0);
+GA_API int GA_CmpBufSts(short *pStatus,unsigned short *pCount);
+GA_API int GA_CmpBufStop(short nChannel);
+GA_API int GA_CmpRpt(short nEncode, short nEncodeType,short nChannel,long lStartPos, long lRptTime, long lInterval, short nTime);
+
+
 //高速硬件捕获指令列表
-GA_API int GA_SetCaptureMode(short encoder,short mode);
-GA_API int GA_GetCaptureMode(short encoder,short *pMode,short nCount=1);
-GA_API int GA_GetCaptureStatus(short encoder,short *pStatus,long *pValue,short nCount=1,unsigned long *pClock=NULL);
-GA_API int GA_SetCaptureSense(short encoder,short mode,short sense);
-GA_API int GA_GetCaptureSense(short encoder,short mode,short *sense);
-GA_API int GA_ClearCaptureStatus(short encoder);
+GA_API int GA_SetCaptureMode(short nEncodeNum,short mode);
+GA_API int GA_GetCaptureMode(short nEncodeNum,short *pMode,short nCount=1);
+GA_API int GA_GetCaptureStatus(short nEncodeNum,short *pStatus,long *pValue,short nCount=1,unsigned long *pClock=NULL);
+GA_API int GA_SetCaptureSense(short nEncodeNum,short mode,short sense);
+GA_API int GA_GetCaptureSense(short nEncodeNum,short mode,short *sense);
+GA_API int GA_ClearCaptureStatus(short nEncodeNum);
 
 //安全机制指令列表
-GA_API int GA_SetSoftLimit(short nAxisNum,long positive,long negative);
+GA_API int GA_SetSoftLimit(short nAxisNum,long lPositive,long lNegative);
 GA_API int GA_GetSoftLimit(short nAxisNum,long *pPositive,long *pNegative);
+GA_API int GA_SetHardLimP(short nAxisNum,short nType ,short nCardIndex,short nIOIndex);
+GA_API int GA_SetHardLimN(short nAxisNum,short nType ,short nCardIndex,short nIOIndex);
 
+//自动回零相关API
+GA_API int GA_HomeStart(int iAxisNum);
+GA_API int GA_HomeStop(int iAxisNum);
+GA_API int GA_HomeSetPrm(int iAxisNum,TAxisHomePrm *pAxisHomePrm);
+GA_API int GA_HomeSetPrmSingle(short iAxisNum,short nHomeMode,short nHomeDir,long lOffset,double dHomeRapidVel,double dHomeLocatVel,double dHomeIndexVel,double dHomeAcc);
+GA_API int GA_HomeGetPrm(int iAxisNum,TAxisHomePrm *pAxisHomePrm);
+GA_API int GA_HomeGetPrmSingle(short iAxisNum,short *nHomeMode,short *nHomeDir,long *lOffset,double* dHomeRapidVel,double* dHomeLocatVel,double* dHomeIndexVel,double* dHomeAcc);
+GA_API int GA_HomeGetSts(int iAxisNum,unsigned short* pStatus);
 
 #pragma pack(pop)

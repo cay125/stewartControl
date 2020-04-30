@@ -11,7 +11,7 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
     stewartPara *para=new stewartPara(170, 80, 280, 47);
     kinematicModule=new inverseKinematic(para);
-    if(GA_Open(1,com_card))
+    if(GA_Open(0,com_card))
         qDebug()<<"open card failed";
     else
         qDebug()<<"open card successful";
@@ -53,6 +53,17 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     legIndex2Motion[3]=4;
     legIndex2Motion[4]=3;
     legIndex2Motion[5]=2;
+#if HARDLIMITS
+    int res=0;
+    for(short i=1;i<=6;i++)
+    {
+        res+=GA_LmtsOn(i,-1);
+        res+=GA_SetHardLimP(i,1,0,i-1);
+        res+=GA_SetHardLimN(i,1,0,i+5);
+        if(res)
+            qDebug()<<"set hard limits failed!!";
+    }
+#endif
 }
 
 void Controller::simpleOperationMode()
@@ -342,6 +353,9 @@ void Controller::IMUControlMode()
     connect(timer,&QTimer::timeout,this,[this]()
     {
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
+#if HARDLIMITS
+        GA_ClrSts(1,6);
+#endif
         if(qFabs(angleX)<1 && qFabs(angleY)<1)
         {
             auto lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
@@ -354,7 +368,7 @@ void Controller::IMUControlMode()
             MoveLegs(lens);
         }
     });
-    timer->setInterval(20);
+    timer->setInterval(10);
     timer->start();
 }
 void Controller::tcpReadDataSlot()

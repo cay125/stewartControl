@@ -16,6 +16,7 @@
 #include <map>
 
 #define FEEDBACK_FROM_MORTOR 0
+#define HARDLIMITS 1
 
 extern QMutex m_mutex;
 extern QWaitCondition m_cond;
@@ -29,7 +30,7 @@ public:
     Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent=nullptr);
     void simpleOperationMode();
     void GuiControlMode();
-    [[noreturn]] void IMUControlMode();
+    void IMUControlMode();
     [[noreturn]] void simpleTrajectory(int mode=0);
     void resetAll();
     void resetAll(int start, int end);
