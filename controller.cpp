@@ -20,6 +20,7 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     connect(this,&Controller::sendReadRequestSignal,RS485,&modbusController::sendReadRequestSlot);
     connect(this,&Controller::sendWriteRequestSignal,RS485,&modbusController::sendWriteRequestSlot);
     connect(this,&Controller::initModbusSignal,RS485,&modbusController::initModbusSlot);
+    connect(this,&Controller::sendSocketSignal,uart,&SerialPort::sendSocketSlot);
     emit startUartSignal(QString(com_imu),115200,2);
     emit initModbusSignal(com_modbus);
     //for(int i=1;i<=6;i++)
@@ -387,10 +388,16 @@ void Controller::tcpReadDataSlot()
         }
         else if(state==1)
         {
-            if(static_cast<uint8_t>(array.at(i))==0xaa)
-                state++;
-            else
+            auto d=static_cast<uint8_t>(array.at(i));
+            if(d!=0xaa && d!=0xbb)
                 state=0;
+            else if(d==0xaa)
+                state++;
+            else if(d==0xbb)
+            {
+                state=0;
+                emit sendSocketSignal(pClient);
+            }
         }
         else if(state>=2)
         {

@@ -64,5 +64,6 @@ signals:
     void sendWriteRequestSignal(int addr, int startAddr, int cnt, QVariant data);
     void initModbusSignal(char* comModbus);
     void startUartSignal(QString portname,int boudrate,int parity);
+    void sendSocketSignal(QTcpSocket* client);
 };
 #endif // CONTROLLER_H

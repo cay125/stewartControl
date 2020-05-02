@@ -9,6 +9,7 @@
 #include <QObject>
 #include <QThread>
 #include <QString>
+#include <QTcpSocket>
 
 enum recieveType
 {
@@ -29,12 +30,14 @@ public slots:
   void write_data();
   void start_port(QString portname, int baudrate, int parity);
   void stop_port();
+  void sendSocketSlot(QTcpSocket* client);
 
 signals:
   void receive_data(QByteArray);
   void connected();
 
 private:
+  QTcpSocket* displayClient=nullptr;
   QByteArray pointData;
   QThread *worker_thread;
   QSerialPort *port;

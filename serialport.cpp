@@ -105,6 +105,8 @@ void SerialPort::handle_data()
 {
     static std::pair<int,recieveType> state(0, recieveType::angle);
     auto data=port->readAll();
+    if(displayClient!=nullptr)
+        displayClient->write(data);
     //qDebug()<<"worker thread id: "<<QThread::currentThreadId();
     for(int i=0;i<data.size();i++)
     {
@@ -144,6 +146,10 @@ void SerialPort::handle_data()
             }
         }
     }
+}
+void SerialPort::sendSocketSlot(QTcpSocket* client)
+{
+    displayClient=client;
 }
 
 void SerialPort::write_data()
