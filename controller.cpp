@@ -25,6 +25,8 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     emit initModbusSignal(com_modbus);
     //for(int i=1;i<=6;i++)
     //    setDriverEnable(i,true);
+    for(int i=0;i<6;i++)
+        pid_regulator[i]=new PIDController(0.01,0.00001,0.00001,50,10,10,50,-50);
     tcpServer->listen(QHostAddress::Any,8088);
     connect(tcpServer,&QTcpServer::newConnection,this,[this]()
     {
@@ -256,12 +258,22 @@ void Controller::GetCurrentPos(int addr)
 }
 void Controller::MoveLegs(QVector<double>& pos)
 {
+    double currentPos[6];
+    GA_GetPrfPos(1,currentPos,6);
     for(int i=1;i<=6;i++)
     {
-        MoveLeg(legIndex2Motion[i-1], kinematicModule->Len2Pulse(pos[i-1]));
+        //MoveLeg(legIndex2Motion[i-1], kinematicModule->Len2Pulse(pos[i-1]));
+        MoveLegInJog(legIndex2Motion[i-1],kinematicModule->Len2Pulse(pos[i-1]),currentPos[i-1]);
         qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
     updateAxis(1,6);
+}
+void Controller::MoveLegInJog(int addr, qint64 pos,double currentPos)
+{
+    pid_regulator[addr-1]->setRef(pos);
+    pid_regulator[addr-1]->setFeedBack(currentPos);
+    pid_regulator[addr-1]->calculate();
+    GA_SetVel(addr,pid_regulator[addr-1]->GetOutput());
 }
 void Controller::MoveLeg(int addr, qint64 pos, bool flag)
 {
@@ -293,34 +305,64 @@ void Controller::updateAxis(int start, int end)
     if(GA_Update(val))
         qDebug()<<"update failed when move legs";
 }
-void Controller::initMode(double acc,double dec,double speed)
+void Controller::initMode(double acc,double dec,double speed,MotionMode mode)
 {
     for(short axis=1;axis<=6;axis++)
     {
-        if(GA_PrfTrap(axis))
+        if(mode==MotionMode::TRAP)
         {
-            qDebug()<<"set trap model failed";
-            return;
+            if(GA_PrfTrap(axis))
+            {
+                qDebug()<<"set trap model failed";
+                return;
+            }
+            TTrapPrm trapPrm;
+            if(GA_GetTrapPrm(axis,&trapPrm))
+            {
+                qDebug()<<"read trap model failed";
+                return;
+            }
+            trapPrm.acc=acc;
+            trapPrm.dec=dec;
+            trapPrm.velStart=0;
+            trapPrm.smoothTime=0;
+            if(GA_SetTrapPrm(axis,&trapPrm))
+            {
+                qDebug()<<"set trap params failed";
+                return;
+            }
+            if(GA_SetVel(axis,speed))
+            {
+                qDebug()<<"set speed failed";
+                return;
+            }
         }
-        TTrapPrm trapPrm;
-        if(GA_GetTrapPrm(axis,&trapPrm))
+        else if(mode==MotionMode::JOG)
         {
-            qDebug()<<"read trap model failed";
-            return;
-        }
-        trapPrm.acc=acc;
-        trapPrm.dec=dec;
-        trapPrm.velStart=0;
-        trapPrm.smoothTime=0;
-        if(GA_SetTrapPrm(axis,&trapPrm))
-        {
-            qDebug()<<"set trap params failed";
-            return;
-        }
-        if(GA_SetVel(axis,speed))
-        {
-            qDebug()<<"set speed failed";
-            return;
+            if(GA_PrfJog(axis))
+            {
+                qDebug()<<"set JOG model failed";
+                return;
+            }
+            JogPrm jogPrm;
+            if(GA_GetJogPrm(axis,&jogPrm))
+            {
+                qDebug()<<"read JOG model failed";
+                return;
+            }
+            jogPrm.dAcc=acc;
+            jogPrm.dDec=dec;
+            jogPrm.dSmooth=0;
+            if(GA_SetJogPrm(axis,&jogPrm))
+            {
+                qDebug()<<"set JOG params failed";
+                return;
+            }
+            if(GA_SetVel(axis,speed))
+            {
+                qDebug()<<"set speed failed";
+                return;
+            }
         }
     }
 }
@@ -334,7 +376,7 @@ void Controller::GuiControlMode()
 void Controller::IMUControlMode()
 {
     currentStatus=Status::IMUControl;
-    initMode(2,2,5);
+    initMode(2,2,5,MotionMode::JOG);
     QVector<double> lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
     qDebug()<<"start move legs home";
     MoveLegs(lens);

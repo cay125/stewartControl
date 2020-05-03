@@ -22,6 +22,7 @@ SOURCES += \
         inversekinematic.cpp \
         main.cpp \
         modbuscontroller.cpp \
+        pidcontroller.cpp \
         serialport.cpp
 
 # Default rules for deployment.
@@ -34,6 +35,7 @@ HEADERS += \
     controller.h \
     inversekinematic.h \
     modbuscontroller.h \
+    pidcontroller.h \
     serialport.h
 
 INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/

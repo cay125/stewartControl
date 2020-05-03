@@ -10,8 +10,8 @@ int main(int argc, char *argv[])
     Controller controller(argv[1], argv[2], argv[3]);
     //controller.simpleOperationMode();
     controller.resetAll();
-    //controller.IMUControlMode();
-    controller.GuiControlMode();
+    controller.IMUControlMode();
+    //controller.GuiControlMode();
     //controller.simpleTrajectory(0);
     qDebug() << "enter qt event loop";
     return a.exec();

@@ -4,6 +4,7 @@
 #include "modbuscontroller.h"
 #include "serialport.h"
 #include "inversekinematic.h"
+#include "pidcontroller.h"
 #include <QString>
 #include <QTimer>
 #include <QModbusClient>
@@ -22,6 +23,7 @@ extern QMutex m_mutex;
 extern QWaitCondition m_cond;
 
 enum Status{Simple,GUIControl,IMUControl};
+enum MotionMode{JOG,TRAP};
 
 class Controller : public QObject
 {
@@ -45,6 +47,7 @@ private:
     QList<QTcpSocket *>tcpClients;
     inverseKinematic *kinematicModule;
     SerialPort* uart;
+    PIDController* pid_regulator[6];
     std::map<int,int> legIndex2Motion;
     double normalZ=353.57+20;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0;
@@ -54,9 +57,10 @@ private:
     void reset(int addr);
     void MoveLegs(QVector<double>& pos);
     void MoveLeg(int addr, qint64 pos, bool flag=false);
+    void MoveLegInJog(int addr,qint64 pos,double currentPos);
     void updateAxis(int start, int end);
     void updatePosition(QByteArray);
-    void initMode(double acc=1,double dec=1,double speed=1);
+    void initMode(double acc=1,double dec=1,double speed=1,MotionMode mode=MotionMode::TRAP);
 private slots:
     void timerSlot();
     void tcpReadDataSlot();
