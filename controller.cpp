@@ -44,6 +44,8 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
             if (pClient)
             {
                 tcpClients.removeAll(pClient);
+                if(imuClient==pClient)
+                    imuClient=nullptr;
                 pClient->deleteLater();
             }
         });
@@ -396,7 +398,8 @@ void Controller::tcpReadDataSlot()
             else if(d==0xbb)
             {
                 state=0;
-                emit sendSocketSignal(pClient);
+                imuClient=pClient;
+                //emit sendSocketSignal(pClient);
             }
         }
         else if(state>=2)
@@ -474,6 +477,8 @@ void Controller::updatePosition(QByteArray data)
         angleX=static_cast<int16_t>(((static_cast<uint8_t>(data.at(2))<<8)|static_cast<uint8_t>(data.at(1))))/32768.0*180.0;
         angleY=static_cast<int16_t>(((static_cast<uint8_t>(data.at(4))<<8)|static_cast<uint8_t>(data.at(3))))/32768.0*180.0;
         angleZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*180.0;
+        if(imuClient!=nullptr)
+            imuClient->write(data);
     }
     else if(type==recieveType::gyro)
     {

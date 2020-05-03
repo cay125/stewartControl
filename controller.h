@@ -41,6 +41,7 @@ private:
     QTimer *timer;
     modbusController *RS485;
     QTcpServer *tcpServer;
+    QTcpSocket *imuClient=nullptr;
     QList<QTcpSocket *>tcpClients;
     inverseKinematic *kinematicModule;
     SerialPort* uart;
