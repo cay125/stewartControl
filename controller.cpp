@@ -1,11 +1,10 @@
- #include <QDebug>
-#include <QModbusRtuSerialMaster>
 #include <iostream>
-#include <QtMath>
 #include "controller.h"
 #include "GAS_N.h"
 QMutex m_mutex;
+QMutex imu_mutex;
 QWaitCondition m_cond;
+QByteArray globalByteArray;
 Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort)
 {
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
@@ -405,21 +404,14 @@ void Controller::IMUControlMode()
     initMode(3,3,10,MotionMode::JOG);
     connect(timer,&QTimer::timeout,this,[this]()
     {
+        analyseData();
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
 #if HARDLIMITS
         GA_ClrSts(1,6);
 #endif
-//        if(qFabs(angleX)<1 && qFabs(angleY)<1)
-//        {
-//            auto lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
-//            MoveLegs(lens,MotionMode::JOG);
-//            QThread::msleep(50);
-//        }
-//        else
-        {
-            refPos = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
-            MoveLegs(refPos,MotionMode::JOG);
-        }
+        refPos = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
+        MoveLegs(refPos,MotionMode::JOG);
+        sendData();
     });
     timer->setInterval(5);
     timer->start();
@@ -552,4 +544,44 @@ void Controller::updatePosition(QByteArray data)
         gyroZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*2000.0;
     }
     //qDebug()<<angleX<<" "<<angleY<<" "<<angleZ;
+}
+void Controller::analyseData()
+{
+    imu_mutex.lock();
+    auto data=globalByteArray;
+    imu_mutex.unlock();
+    auto type=static_cast<recieveType>(data.at(0));
+    if(type==recieveType::angle)
+    {
+        angleX=static_cast<int16_t>(((static_cast<uint8_t>(data.at(2))<<8)|static_cast<uint8_t>(data.at(1))))/32768.0*180.0;
+        angleY=static_cast<int16_t>(((static_cast<uint8_t>(data.at(4))<<8)|static_cast<uint8_t>(data.at(3))))/32768.0*180.0;
+        angleZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*180.0;
+    }
+}
+void Controller::sendData()
+{
+    imu_mutex.lock();
+    auto data=globalByteArray;
+    imu_mutex.unlock();
+    auto type=static_cast<recieveType>(data.at(0));
+    if(type==recieveType::angle)
+    {
+        if(imuClient!=nullptr)
+        {
+            for(int i=0;i<6;i++)
+                data.append(static_cast<char>(pid_regulator[i]->GetOutput()));
+            for(int i=0;i<6;i++)
+            {
+                data.append(static_cast<char>(static_cast<int16_t>(currentPos[i])>>8));
+                data.append(static_cast<char>(static_cast<int16_t>(currentPos[i])&0x00ff));
+            }
+            for(int i=0;i<6;i++)
+            {
+                auto puls=kinematicModule->Len2Pulse(refPos[motion2LegIndex[i+1]]);
+                data.append(static_cast<char>(static_cast<int16_t>(-puls)>>8));
+                data.append(static_cast<char>(static_cast<int16_t>(-puls)&0x00ff));
+            }
+            imuClient->write(data);
+        }
+    }
 }

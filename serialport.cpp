@@ -1,4 +1,5 @@
 #include "serialport.h"
+#include "controller.h"
 #include <QSerialPortInfo>
 #include <utility>
 SerialPort::SerialPort(QObject *parent) : QObject(parent)
@@ -142,7 +143,10 @@ void SerialPort::handle_data()
             if(state.first>=8)
             {
                 state.first=0;
-                emit receive_data(pointData);
+                //emit receive_data(pointData);
+                imu_mutex.lock();
+                globalByteArray=pointData;
+                imu_mutex.unlock();
             }
         }
     }

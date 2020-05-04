@@ -17,10 +17,12 @@
 #include <map>
 
 #define FEEDBACK_FROM_MORTOR 0
-#define HARDLIMITS 1
+#define HARDLIMITS 0
 
 extern QMutex m_mutex;
+extern QMutex imu_mutex;
 extern QWaitCondition m_cond;
+extern QByteArray globalByteArray;
 
 enum Status{Simple,GUIControl,IMUControl};
 enum MotionMode{JOG,TRAP};
@@ -37,7 +39,6 @@ public:
     void resetAll();
     void resetAll(int start, int end);
     void setDriverEnable(int addr, bool value);
-    void GetZphasePos(int addr);
     Status currentStatus=GUIControl;
 private:
     QTimer *timer;
@@ -55,7 +56,7 @@ private:
     QVector<double> refPos;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
-    //void GetZphasePos(int addr);
+    void GetZphasePos(int addr);
     void GetCurrentPos(int addr);
     void reset(int addr);
     void MoveLegs(QVector<double>& pos,MotionMode mode=MotionMode::TRAP);
@@ -63,6 +64,8 @@ private:
     void MoveLegInJog(int addr,qint64 pos,double currentPos);
     void updateAxis(int start, int end);
     void updatePosition(QByteArray);
+    void sendData();
+    void analyseData();
     void initMode(double acc=1,double dec=1,double speed=1,MotionMode mode=MotionMode::TRAP);
 private slots:
     void timerSlot();
