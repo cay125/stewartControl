@@ -1,4 +1,4 @@
-#include <QDebug>
+ #include <QDebug>
 #include <QModbusRtuSerialMaster>
 #include <iostream>
 #include <QtMath>
@@ -26,7 +26,7 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     //for(int i=1;i<=6;i++)
     //    setDriverEnable(i,true);
     for(int i=0;i<6;i++)
-        pid_regulator[i]=new PIDController(0.01,0.00001,0.00001,50,10,10,50,-50);
+        pid_regulator[i]=new PIDController(0.013,0.0003,0,50,10,10,30,-30);
     tcpServer->listen(QHostAddress::Any,8088);
     connect(tcpServer,&QTcpServer::newConnection,this,[this]()
     {
@@ -58,6 +58,9 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     legIndex2Motion[3]=4;
     legIndex2Motion[4]=3;
     legIndex2Motion[5]=2;
+    for(auto it=legIndex2Motion.begin();it!=legIndex2Motion.end();it++)
+        motion2LegIndex[it->second]=it->first;
+    refPos.resize(6);
 #if HARDLIMITS
     int res=0;
     for(short i=1;i<=6;i++)
@@ -206,6 +209,7 @@ void Controller::resetAll()
     {
         reset(i);
         GA_ZeroPos(i,1);
+        GA_ClrSts(i,1);
     }
     QVector<int> t(6,0);
     int cntZros=0;
@@ -217,7 +221,7 @@ void Controller::resetAll()
         for(int i=0;i<6;i++)
         {
             std::cout<<"|addr"<<i+1<<" "<<RS485->zPhasePos[i]->GetCurrentPos()<<"| ";
-            if(abs(RS485->zPhasePos[i]->GetCurrentPos())<=50 && t[i]==0)
+            if((abs(RS485->zPhasePos[i]->GetCurrentPos())<=50 || abs(10000-RS485->zPhasePos[i]->GetCurrentPos())<=50) && t[i]==0)
             {
                 cntZros++;
                 t[i]=1;
@@ -256,23 +260,26 @@ void Controller::GetCurrentPos(int addr)
     m_cond.wait(&m_mutex);
     m_mutex.unlock();
 }
-void Controller::MoveLegs(QVector<double>& pos)
+void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
 {
-    double currentPos[6];
-    GA_GetPrfPos(1,currentPos,6);
+    if(mode==MotionMode::JOG)
+        GA_GetPrfPos(1,currentPos,6);
     for(int i=1;i<=6;i++)
     {
-        //MoveLeg(legIndex2Motion[i-1], kinematicModule->Len2Pulse(pos[i-1]));
-        MoveLegInJog(legIndex2Motion[i-1],kinematicModule->Len2Pulse(pos[i-1]),currentPos[i-1]);
+        if(mode==MotionMode::TRAP)
+            MoveLeg(legIndex2Motion[i-1], kinematicModule->Len2Pulse(pos[i-1]));
+        else if(mode==MotionMode::JOG)
+            MoveLegInJog(legIndex2Motion[i-1],-kinematicModule->Len2Pulse(pos[i-1]),currentPos[legIndex2Motion[i-1]-1]);
         qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
     updateAxis(1,6);
 }
-void Controller::MoveLegInJog(int addr, qint64 pos,double currentPos)
+void Controller::MoveLegInJog(int addr, qint64 pos,double _currentPos)
 {
     pid_regulator[addr-1]->setRef(pos);
-    pid_regulator[addr-1]->setFeedBack(currentPos);
+    pid_regulator[addr-1]->setFeedBack(_currentPos);
     pid_regulator[addr-1]->calculate();
+    qDebug()<<"fdb:"<<_currentPos<<" ref:"<<pos<<" output:"<<pid_regulator[addr-1]->GetOutput();
     GA_SetVel(addr,pid_regulator[addr-1]->GetOutput());
 }
 void Controller::MoveLeg(int addr, qint64 pos, bool flag)
@@ -369,14 +376,14 @@ void Controller::initMode(double acc,double dec,double speed,MotionMode mode)
 void Controller::GuiControlMode()
 {
     currentStatus=Status::GUIControl;
-    initMode(2,2,5);
+    initMode(2,2,5,MotionMode::TRAP);
     QVector<double> len = kinematicModule->GetLength(0,0,normalZ,0,0,0);
     MoveLegs(len);
 }
 void Controller::IMUControlMode()
 {
     currentStatus=Status::IMUControl;
-    initMode(2,2,5,MotionMode::JOG);
+    initMode(2,2,5,MotionMode::TRAP);
     QVector<double> lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
     qDebug()<<"start move legs home";
     MoveLegs(lens);
@@ -395,25 +402,26 @@ void Controller::IMUControlMode()
             axis++;
     }
     qDebug()<<"move home finished";
+    initMode(3,3,10,MotionMode::JOG);
     connect(timer,&QTimer::timeout,this,[this]()
     {
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
 #if HARDLIMITS
         GA_ClrSts(1,6);
 #endif
-        if(qFabs(angleX)<1 && qFabs(angleY)<1)
+//        if(qFabs(angleX)<1 && qFabs(angleY)<1)
+//        {
+//            auto lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
+//            MoveLegs(lens,MotionMode::JOG);
+//            QThread::msleep(50);
+//        }
+//        else
         {
-            auto lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
-            MoveLegs(lens);
-            QThread::msleep(50);
-        }
-        else
-        {
-            auto lens = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
-            MoveLegs(lens);
+            refPos = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
+            MoveLegs(refPos,MotionMode::JOG);
         }
     });
-    timer->setInterval(10);
+    timer->setInterval(5);
     timer->start();
 }
 void Controller::tcpReadDataSlot()
@@ -520,7 +528,22 @@ void Controller::updatePosition(QByteArray data)
         angleY=static_cast<int16_t>(((static_cast<uint8_t>(data.at(4))<<8)|static_cast<uint8_t>(data.at(3))))/32768.0*180.0;
         angleZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*180.0;
         if(imuClient!=nullptr)
+        {
+            for(int i=0;i<6;i++)
+                data.append(static_cast<char>(pid_regulator[i]->GetOutput()));
+            for(int i=0;i<6;i++)
+            {
+                data.append(static_cast<char>(static_cast<int16_t>(currentPos[i])>>8));
+                data.append(static_cast<char>(static_cast<int16_t>(currentPos[i])&0x00ff));
+            }
+            for(int i=0;i<6;i++)
+            {
+                auto puls=kinematicModule->Len2Pulse(refPos[motion2LegIndex[i+1]]);
+                data.append(static_cast<char>(static_cast<int16_t>(-puls)>>8));
+                data.append(static_cast<char>(static_cast<int16_t>(-puls)&0x00ff));
+            }
             imuClient->write(data);
+        }
     }
     else if(type==recieveType::gyro)
     {
