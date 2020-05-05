@@ -14,6 +14,10 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
         qDebug()<<"open card failed";
     else
         qDebug()<<"open card successful";
+    if(GA_Reset())
+        qDebug()<<"reset card failed";
+    else
+        qDebug()<<"reset card successful";
     connect(this,&Controller::startUartSignal,uart,&SerialPort::start_port);
     connect(uart,&SerialPort::receive_data,this,&Controller::updatePosition);
     connect(this,&Controller::sendReadRequestSignal,RS485,&modbusController::sendReadRequestSlot);
@@ -25,7 +29,7 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     //for(int i=1;i<=6;i++)
     //    setDriverEnable(i,true);
     for(int i=0;i<6;i++)
-        pid_regulator[i]=new PIDController(0.013,0.0003,0,50,10,10,30,-30);
+        pid_regulator[i]=new PIDController(0.015,0.001,0.02,50,10,10,40,-40);
     tcpServer->listen(QHostAddress::Any,8088);
     connect(tcpServer,&QTcpServer::newConnection,this,[this]()
     {
@@ -261,8 +265,11 @@ void Controller::GetCurrentPos(int addr)
 }
 void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
 {
+    TIMEBEGIN()
     if(mode==MotionMode::JOG)
         GA_GetPrfPos(1,currentPos,6);
+    TIMEEND("Get Pos:")
+    TIMEBEGIN()
     for(int i=1;i<=6;i++)
     {
         if(mode==MotionMode::TRAP)
@@ -271,7 +278,10 @@ void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
             MoveLegInJog(legIndex2Motion[i-1],-kinematicModule->Len2Pulse(pos[i-1]),currentPos[legIndex2Motion[i-1]-1]);
         qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
+    TIMEEND("Set Speed:")
+    TIMEBEGIN()
     updateAxis(1,6);
+    TIMEEND("Update Axis:")
 }
 void Controller::MoveLegInJog(int addr, qint64 pos,double _currentPos)
 {
@@ -404,6 +414,7 @@ void Controller::IMUControlMode()
     initMode(3,3,10,MotionMode::JOG);
     connect(timer,&QTimer::timeout,this,[this]()
     {
+        TIMEBEGIN()
         analyseData();
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
 #if HARDLIMITS
@@ -411,9 +422,12 @@ void Controller::IMUControlMode()
 #endif
         refPos = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
         MoveLegs(refPos,MotionMode::JOG);
+        TIMEBEGIN()
         sendData();
+        TIMEEND("Send Data:")
+        TIMEEND("Total:")
     });
-    timer->setInterval(5);
+    timer->setInterval(1);
     timer->start();
 }
 void Controller::tcpReadDataSlot()
@@ -441,6 +455,7 @@ void Controller::tcpReadDataSlot()
             {
                 state=0;
                 imuClient=pClient;
+                qDebug()<<"data display conn established";
                 //emit sendSocketSignal(pClient);
             }
         }

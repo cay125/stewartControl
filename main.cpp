@@ -7,6 +7,7 @@
 
 BOOL HandlerRoutine(DWORD dwCtrlType)
 {
+    GA_Stop(0x3f,0);
     GA_Close();
     switch (dwCtrlType)
     {
