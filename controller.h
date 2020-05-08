@@ -32,6 +32,7 @@ extern QMutex m_mutex;
 extern QMutex imu_mutex;
 extern QWaitCondition m_cond;
 extern QByteArray globalByteArray;
+extern QByteArray globalGyroArray;
 
 enum Status{Simple,GUIControl,IMUControl};
 enum MotionMode{JOG,TRAP};
@@ -63,6 +64,7 @@ private:
     double normalZ=353.57+20;
     double currentPos[6]={0};
     QVector<double> refPos;
+    QVector<double> refSpeed;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
     void GetZphasePos(int addr);

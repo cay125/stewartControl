@@ -5,6 +5,7 @@ QMutex m_mutex;
 QMutex imu_mutex;
 QWaitCondition m_cond;
 QByteArray globalByteArray;
+QByteArray globalGyroArray;
 Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort)
 {
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
@@ -420,6 +421,7 @@ void Controller::IMUControlMode()
 #if HARDLIMITS
         GA_ClrSts(1,6);
 #endif
+        refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,gyroZ);
         refPos = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
         MoveLegs(refPos,MotionMode::JOG);
         TIMEBEGIN()
@@ -564,22 +566,28 @@ void Controller::analyseData()
 {
     imu_mutex.lock();
     auto data=globalByteArray;
+    auto data2=globalGyroArray;
     imu_mutex.unlock();
-    auto type=static_cast<recieveType>(data.at(0));
-    if(type==recieveType::angle)
+    if(data.size())
     {
         angleX=static_cast<int16_t>(((static_cast<uint8_t>(data.at(2))<<8)|static_cast<uint8_t>(data.at(1))))/32768.0*180.0;
         angleY=static_cast<int16_t>(((static_cast<uint8_t>(data.at(4))<<8)|static_cast<uint8_t>(data.at(3))))/32768.0*180.0;
         angleZ=static_cast<int16_t>(((static_cast<uint8_t>(data.at(6))<<8)|static_cast<uint8_t>(data.at(5))))/32768.0*180.0;
+    }
+    if(data2.size())
+    {
+        gyroX=static_cast<int16_t>(((static_cast<uint8_t>(data2.at(2))<<8)|static_cast<uint8_t>(data2.at(1))))/32768.0*2000.0;
+        gyroY=static_cast<int16_t>(((static_cast<uint8_t>(data2.at(4))<<8)|static_cast<uint8_t>(data2.at(3))))/32768.0*2000.0;
+        gyroZ=static_cast<int16_t>(((static_cast<uint8_t>(data2.at(6))<<8)|static_cast<uint8_t>(data2.at(5))))/32768.0*2000.0;
     }
 }
 void Controller::sendData()
 {
     imu_mutex.lock();
     auto data=globalByteArray;
+    auto data2=globalGyroArray;
     imu_mutex.unlock();
-    auto type=static_cast<recieveType>(data.at(0));
-    if(type==recieveType::angle)
+    if(data.size() && data2.size())
     {
         if(imuClient!=nullptr)
         {
@@ -596,6 +604,13 @@ void Controller::sendData()
                 data.append(static_cast<char>(static_cast<int16_t>(-puls)>>8));
                 data.append(static_cast<char>(static_cast<int16_t>(-puls)&0x00ff));
             }
+            for(int i=0;i<6;i++)
+            {
+                auto speed=kinematicModule->Speed2Pulse(refSpeed[motion2LegIndex[i+1]]);
+                for(int j=0;j<4;j++)
+                    data.append(static_cast<char>(static_cast<int32_t>(speed)>>(8*(3-i))));
+            }
+            data.append(data2);
             imuClient->write(data);
         }
     }

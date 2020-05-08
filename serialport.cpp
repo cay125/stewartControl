@@ -145,7 +145,10 @@ void SerialPort::handle_data()
                 state.first=0;
                 //emit receive_data(pointData);
                 imu_mutex.lock();
-                globalByteArray=pointData;
+                if(state.second==recieveType::angle)
+                    globalByteArray=pointData;
+                else if(state.second==recieveType::gyro)
+                    globalGyroArray=pointData;
                 imu_mutex.unlock();
             }
         }
