@@ -18,13 +18,18 @@ class inverseKinematic
 public:
     explicit inverseKinematic(stewartPara* _para);
     QVector<double> GetLength(double x,double y,double z,double rotateX,double rotateY, double rotateZ);
+    QVector<double> GetSpeed(double gyrox,double gyroy,double gyroz);
     qint64 Len2Pulse(double);
+    qint64 Speed2Pulse(double);
     Eigen::Matrix3d rotation3D(double angle, Eigen::Vector3d axis);
     stewartPara *para;
 private:
     Eigen::MatrixXd B=Eigen::MatrixXd::Zero(3,6);
     Eigen::MatrixXd P=Eigen::MatrixXd::Zero(3,6);
 
+    Eigen::MatrixXd len_arrow;
+    Eigen::Matrix3d R;
+    double leg_norm[6]={0};
     void initBase();
 };
 

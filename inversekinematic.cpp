@@ -1,6 +1,6 @@
 #include "inversekinematic.h"
 #include <QtMath>
-inverseKinematic::inverseKinematic(stewartPara* _para)
+inverseKinematic::inverseKinematic(stewartPara* _para) : len_arrow(3,6)
 {
     para=_para;
     initBase();
@@ -21,6 +21,19 @@ void inverseKinematic::initBase()
     }
     Eigen::Matrix3d R=rotation3D(-M_PI/3, Eigen::Vector3d(0,0,1));
     P=R*P;
+}
+QVector<double> inverseKinematic::GetSpeed(double gyrox, double gyroy, double gyroz)
+{
+    Eigen::Matrix3d Sw;
+    Sw<<     0,-gyroz, gyroy,
+         gyroz,     0,-gyrox,
+        -gyroy, gyrox,     0;
+    Eigen::MatrixXd t(3,6);
+    t=Sw*R*P;
+    QVector<double> speed;
+    for(int i=0;i<6;i++)
+        speed.append(t.col(i).dot(len_arrow.col(i))/leg_norm[i]);
+    return speed;
 }
 Eigen::Matrix3d inverseKinematic::rotation3D(double angle, Eigen::Vector3d axis)
 {
@@ -53,12 +66,16 @@ QVector<double> inverseKinematic::GetLength(double x,double y,double z,double ro
     RZ<<qCos(rotateZ),-qSin(rotateZ),0,
         qSin(rotateZ), qCos(rotateZ),0,
         0,0,1;
-    Eigen::Matrix3d R=RZ*RX*RY;
-    Eigen::MatrixXd len_arrow(3,6);
+    //Eigen::Matrix3d R=RZ*RX*RY;
+    R=RZ*RX*RY;
+    //Eigen::MatrixXd len_arrow(3,6);
     len_arrow=R*P+d-B;
     QVector<double> len_norm;
     for(int i=0;i<6;i++)
-        len_norm.append(len_arrow.col(i).norm());
+    {
+        leg_norm[i]=len_arrow.col(i).norm();
+        len_norm.append(leg_norm[i]);
+    }
     return len_norm;
 }
 stewartPara::stewartPara(double _radiusB, double _radiusP, double _hexSkew, double _nom_l, double _uniH)
@@ -79,4 +96,8 @@ stewartPara::stewartPara(double _radius, double _hexLen, double _nom_l, double u
 qint64 inverseKinematic::Len2Pulse(double len)
 {
     return static_cast<int>((len-para->nomialLength)*(2000/10));
+}
+qint64 inverseKinematic::Speed2Pulse(double speed)
+{
+    return static_cast<int>(speed*(2000/10));
 }
