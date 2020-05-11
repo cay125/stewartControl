@@ -290,7 +290,7 @@ void Controller::MoveLegInJog(int addr, qint64 pos,double _currentPos)
     pid_regulator[addr-1]->setFeedBack(_currentPos);
     pid_regulator[addr-1]->calculate();
     qDebug()<<"fdb:"<<_currentPos<<" ref:"<<pos<<" output:"<<pid_regulator[addr-1]->GetOutput();
-    GA_SetVel(addr,pid_regulator[addr-1]->GetOutput());
+    GA_SetVel(addr,pid_regulator[addr-1]->GetOutput()+refSpeed[motion2LegIndex[addr]]*0.25);
 }
 void Controller::MoveLeg(int addr, qint64 pos, bool flag)
 {
@@ -421,7 +421,8 @@ void Controller::IMUControlMode()
 #if HARDLIMITS
         GA_ClrSts(1,6);
 #endif
-        refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,gyroZ);
+        //refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,gyroZ);
+        refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,0);
         refPos = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
         MoveLegs(refPos,MotionMode::JOG);
         TIMEBEGIN()
@@ -608,7 +609,7 @@ void Controller::sendData()
             {
                 auto speed=kinematicModule->Speed2Pulse(refSpeed[motion2LegIndex[i+1]]);
                 for(int j=0;j<4;j++)
-                    data.append(static_cast<char>(static_cast<int32_t>(speed)>>(8*(3-i))));
+                    data.append(static_cast<char>(static_cast<int32_t>(speed)>>(8*(3-j))));
             }
             data.append(data2);
             imuClient->write(data);

@@ -25,9 +25,9 @@ void inverseKinematic::initBase()
 QVector<double> inverseKinematic::GetSpeed(double gyrox, double gyroy, double gyroz)
 {
     Eigen::Matrix3d Sw;
-    Sw<<     0,-gyroz, gyroy,
-         gyroz,     0,-gyrox,
-        -gyroy, gyrox,     0;
+    Sw<<                0,-gyroz/180.0*M_PI, gyroy/180.0*M_PI,
+         gyroz/180.0*M_PI,                0,-gyrox/180.0*M_PI,
+        -gyroy/180.0*M_PI, gyrox/180.0*M_PI,                0;
     Eigen::MatrixXd t(3,6);
     t=Sw*R*P;
     QVector<double> speed;
