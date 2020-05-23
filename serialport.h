@@ -13,7 +13,7 @@
 
 enum recieveType
 {
-    gyro='0',angle
+    gyro='0',angle,acc,time_stamp
 };
 
 class SerialPort : public QObject

@@ -34,9 +34,24 @@ extern QMutex imu_mutex;
 extern QWaitCondition m_cond;
 extern QByteArray globalByteArray;
 extern QByteArray globalGyroArray;
+extern QByteArray globalTopAngleArray;
+extern QByteArray globalAccArray;
+extern QByteArray globalTimeArray;
 
 enum Status{Simple,GUIControl,IMUControl};
 enum MotionMode{JOG,TRAP};
+class ImuTime
+{
+public:
+    int year=0;
+    int month=0;
+    int day=0;
+    int hour=0;
+    int minite=0;
+    int seconds=0;
+    int ms=0;
+    static int GetDuration(ImuTime new_stamp,ImuTime old_stamp);
+};
 
 class Controller : public QObject
 {
@@ -66,8 +81,11 @@ private:
     double currentPos[6]={0};
     QVector<double> refPos;
     QVector<double> refSpeed;
-    double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0;
+    ImuTime timeStamp;
+    double gra=9.8;
+    double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0,accX=0,accY=0,accZ=0,velX=0,velY=0,velZ=0,disX=0,disY=0,disZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
+    void correctionGra();
     void GetZphasePos(int addr);
     void GetCurrentPos(int addr);
     void reset(int addr);

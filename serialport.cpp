@@ -119,7 +119,7 @@ void SerialPort::handle_data()
         }
         else if(state.first==1)
         {
-            if(num!=0x52 && num!=0x53)
+            if(num!=0x52 && num!=0x53 && num!=0x50 && num!=0x51)
             {
                 state.first=0;
             }
@@ -135,12 +135,24 @@ void SerialPort::handle_data()
                 pointData.append(recieveType::angle);
                 state.second=recieveType::angle;
             }
+            else if(num==0x50)
+            {
+                state.first++;
+                pointData.append(recieveType::time_stamp);
+                state.second=recieveType::time_stamp;
+            }
+            else if(num==0x51)
+            {
+                state.first++;
+                pointData.append(recieveType::acc);
+                state.second=recieveType::acc;
+            }
         }
         else if(state.first>1)
         {
             state.first++;
             pointData.append(data.at(i));
-            if(state.first>=8)
+            if(state.first>=10)
             {
                 state.first=0;
                 //emit receive_data(pointData);
@@ -149,6 +161,10 @@ void SerialPort::handle_data()
                     globalByteArray=pointData;
                 else if(state.second==recieveType::gyro)
                     globalGyroArray=pointData;
+                else if(state.second==recieveType::acc)
+                    globalAccArray=pointData;
+                else if(state.second==recieveType::time_stamp)
+                    globalTimeArray=pointData;
                 imu_mutex.unlock();
             }
         }

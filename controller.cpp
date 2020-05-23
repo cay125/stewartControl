@@ -6,6 +6,9 @@ QMutex imu_mutex;
 QWaitCondition m_cond;
 QByteArray globalByteArray;
 QByteArray globalGyroArray;
+QByteArray globalTopAngleArray;
+QByteArray globalAccArray;
+QByteArray globalTimeArray;
 Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort)
 {
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
@@ -428,7 +431,8 @@ void Controller::IMUControlMode()
 {
     currentStatus=Status::IMUControl;
     initMode(2,2,5,MotionMode::TRAP);
-    QVector<double> lens = kinematicModule->GetLength(0,0,normalZ,0,0,0);
+    analyseData();
+    QVector<double> lens = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
     qDebug()<<"start move legs home";
     MoveLegs(lens);
     short axis=1;
@@ -452,6 +456,7 @@ void Controller::IMUControlMode()
         TIMEBEGIN()
         analyseData();
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
+        qDebug()<<"disX: "<<disX<<" disY: "<<disY<<" disZ: "<<disZ;
 #if HARDLIMITS
         //GA_ClrSts(1,6); //it looks we needn't to clear state
 #endif
@@ -602,6 +607,8 @@ void Controller::analyseData()
     imu_mutex.lock();
     auto data=globalByteArray;
     auto data2=globalGyroArray;
+    auto data3=globalAccArray;
+    auto data4=globalTimeArray;
     imu_mutex.unlock();
     if(data.size())
     {
@@ -614,6 +621,40 @@ void Controller::analyseData()
         gyroX=static_cast<int16_t>(((static_cast<uint8_t>(data2.at(2))<<8)|static_cast<uint8_t>(data2.at(1))))/32768.0*2000.0;
         gyroY=static_cast<int16_t>(((static_cast<uint8_t>(data2.at(4))<<8)|static_cast<uint8_t>(data2.at(3))))/32768.0*2000.0;
         gyroZ=static_cast<int16_t>(((static_cast<uint8_t>(data2.at(6))<<8)|static_cast<uint8_t>(data2.at(5))))/32768.0*2000.0;
+    }
+    if(data3.size())
+    {
+        accX=static_cast<int16_t>(((static_cast<uint8_t>(data3.at(2))<<8)|static_cast<uint8_t>(data3.at(1))))/32768.0*16.0*gra;
+        accY=static_cast<int16_t>(((static_cast<uint8_t>(data3.at(4))<<8)|static_cast<uint8_t>(data3.at(3))))/32768.0*16.0*gra;
+        accZ=static_cast<int16_t>(((static_cast<uint8_t>(data3.at(6))<<8)|static_cast<uint8_t>(data3.at(5))))/32768.0*16.0*gra;
+    }
+    static bool onceFlag=false;
+    if(data4.size())
+    {
+        ImuTime t_stamp;
+        t_stamp.year=static_cast<uint8_t>(data4.at(1));
+        t_stamp.month=static_cast<uint8_t>(data4.at(2));
+        t_stamp.day=static_cast<uint8_t>(data4.at(3));
+        t_stamp.hour=static_cast<uint8_t>(data4.at(4));
+        t_stamp.minite=static_cast<uint8_t>(data4.at(5));
+        t_stamp.seconds=static_cast<uint8_t>(data4.at(6));
+        t_stamp.ms=static_cast<int16_t>(((static_cast<uint8_t>(data4.at(8))<<8)|static_cast<uint8_t>(data4.at(7))));
+        if(onceFlag)
+        {
+            double duration=ImuTime::GetDuration(t_stamp,timeStamp)/1000.0;
+            qDebug()<<"duration: "<<duration*1000;
+            disX=disX+velX*duration+0.5*accX*duration*duration;
+            disY=disY+velY*duration+0.5*accY*duration*duration;
+            disZ=disZ+velZ*duration+0.5*(accZ-gra)*duration*duration;
+            velX=duration*accX;
+            velY=duration*accY;
+            velZ=duration*(accZ-gra);
+        }
+        else
+        {
+            onceFlag=true;
+        }
+        timeStamp=t_stamp;
     }
 }
 void Controller::sendData()
@@ -649,4 +690,32 @@ void Controller::sendData()
             imuClient->write(data);
         }
     }
+}
+int ImuTime::GetDuration(ImuTime new_stamp,ImuTime old_stamp)
+{
+    if(new_stamp.year>old_stamp.year)
+        new_stamp.month+=12*(new_stamp.year-old_stamp.year);
+    if(new_stamp.month>old_stamp.month)
+        new_stamp.day+=30*(new_stamp.month-old_stamp.month);
+    if(new_stamp.day>old_stamp.day)
+        new_stamp.hour+=24*(new_stamp.day-old_stamp.day);
+    if(new_stamp.hour>old_stamp.hour)
+        new_stamp.minite+=60*(new_stamp.hour-old_stamp.hour);
+    if(new_stamp.minite>old_stamp.minite)
+        new_stamp.seconds+=60*(new_stamp.minite-old_stamp.minite);
+    if(new_stamp.seconds>old_stamp.seconds)
+        new_stamp.ms+=1000*(new_stamp.seconds-old_stamp.seconds);
+    return new_stamp.ms-old_stamp.ms;
+}
+void Controller::correctionGra()
+{
+    double sumAccZ=0;
+    int times=20;
+    for(int i=0;i<times;i++)
+    {
+        analyseData();
+        sumAccZ+=accZ;
+        QThread::msleep(25);
+    }
+    gra=sumAccZ/times;
 }
