@@ -71,7 +71,7 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
     {
         res+=GA_LmtsOn(i,-1);
         res+=GA_SetHardLimP(i,1,0,i-1);
-        res+=GA_SetHardLimN(i,1,0,i+5);
+        res+=GA_SetHardLimN(i,1,0,i+7);
         if(res)
             qDebug()<<"set hard limits failed!!";
     }
@@ -271,18 +271,47 @@ void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
         GA_GetPrfPos(1,currentPos,6);
     TIMEEND("Get Pos:")
     TIMEBEGIN()
+#if MULTI_VEL
+    QVector<qint64> poses(6);
+#endif
     for(int i=1;i<=6;i++)
     {
         if(mode==MotionMode::TRAP)
             MoveLeg(legIndex2Motion[i-1], kinematicModule->Len2Pulse(pos[i-1]));
         else if(mode==MotionMode::JOG)
+        {
+#if !MULTI_VEL
             MoveLegInJog(legIndex2Motion[i-1],-kinematicModule->Len2Pulse(pos[i-1]),currentPos[legIndex2Motion[i-1]-1]);
+#else
+            poses[legIndex2Motion[i-1]-1]=-kinematicModule->Len2Pulse(pos[i-1]);
+#endif
+        }
         qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
+#if MULTI_VEL
+    if(mode==MotionMode::JOG)
+        MoveMultiLegInJog(1,6,poses,currentPos);
+#endif
     TIMEEND("Set Speed:")
     TIMEBEGIN()
     updateAxis(1,6);
     TIMEEND("Update Axis:")
+}
+void Controller::MoveMultiLegInJog(short addrStart, short addrEnd, QVector<qint64>& poses, double *currentPoses)
+{
+    double refVels[6]={0};
+    for(short addr=addrStart;addr<=addrEnd;addr++)
+    {
+        pid_regulator[addr-1]->setRef(poses[addr-1]);
+        pid_regulator[addr-1]->setFeedBack(currentPoses[addr-1]);
+        pid_regulator[addr-1]->calculate();
+        refVels[addr-1]=pid_regulator[addr-1]->GetOutput()+refSpeed[motion2LegIndex[addr]]*0.23;
+        if(refVels[addr-1]>35)
+            refVels[addr-1]=35;
+        else if(refVels[addr-1]<-35)
+            refVels[addr-1]=-35;
+    }
+    GA_SetMultiVel(addrStart,refVels+addrStart-1,addrEnd-addrStart+1);
 }
 void Controller::MoveLegInJog(int addr, qint64 pos,double _currentPos)
 {
@@ -290,7 +319,12 @@ void Controller::MoveLegInJog(int addr, qint64 pos,double _currentPos)
     pid_regulator[addr-1]->setFeedBack(_currentPos);
     pid_regulator[addr-1]->calculate();
     qDebug()<<"fdb:"<<_currentPos<<" ref:"<<pos<<" output:"<<pid_regulator[addr-1]->GetOutput();
-    GA_SetVel(addr,pid_regulator[addr-1]->GetOutput()+refSpeed[motion2LegIndex[addr]]*0.25);
+    double t_vel=pid_regulator[addr-1]->GetOutput()+refSpeed[motion2LegIndex[addr]]*0.23;
+    if(t_vel>35)
+        t_vel=35;
+    else if(t_vel<-35)
+        t_vel=-35;
+    GA_SetVel(addr,t_vel);
 }
 void Controller::MoveLeg(int addr, qint64 pos, bool flag)
 {
@@ -419,7 +453,7 @@ void Controller::IMUControlMode()
         analyseData();
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
 #if HARDLIMITS
-        GA_ClrSts(1,6);
+        //GA_ClrSts(1,6); //it looks we needn't to clear state
 #endif
         //refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,gyroZ);
         refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,0);

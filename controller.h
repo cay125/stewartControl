@@ -17,8 +17,9 @@
 #include <map>
 
 #define FEEDBACK_FROM_MORTOR 0
-#define HARDLIMITS 0
+#define HARDLIMITS 1
 #define SHOW_CYCLE_TIME 1
+#define MULTI_VEL 1
 #define TIMEBEGIN() {\
                         auto time1=std::chrono::steady_clock::now();
 #define TIMEEND(PARA) \
@@ -73,6 +74,7 @@ private:
     void MoveLegs(QVector<double>& pos,MotionMode mode=MotionMode::TRAP);
     void MoveLeg(int addr, qint64 pos, bool flag=false);
     void MoveLegInJog(int addr,qint64 pos,double currentPos);
+    void MoveMultiLegInJog(short addrStart,short addrEnd,QVector<qint64>& poses,double* currentPoses);
     void updateAxis(int start, int end);
     void updatePosition(QByteArray);
     void sendData();
