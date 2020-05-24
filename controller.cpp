@@ -687,6 +687,15 @@ void Controller::sendData()
                     data.append(static_cast<char>(static_cast<int32_t>(speed)>>(8*(3-j))));
             }
             data.append(data2);
+            double accZmm=accZ*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(accZmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(accZmm)&0x00ff));
+            double velZmm=velZ*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(velZmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(velZmm)&0x00ff));
+            double disZmm=disZ*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(disZmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(disZmm)&0x00ff));
             imuClient->write(data);
         }
     }
