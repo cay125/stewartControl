@@ -22,6 +22,28 @@ void inverseKinematic::initBase()
     Eigen::Matrix3d R=rotation3D(-M_PI/3, Eigen::Vector3d(0,0,1));
     P=R*P;
 }
+Eigen::Matrix3d inverseKinematic::GetOrientDir(double rotateX, double rotateY, double rotateZ)
+{
+    rotateX=rotateX*M_PI/180;
+    rotateY=rotateY*M_PI/180;
+    rotateZ=rotateZ*M_PI/180;
+    Eigen::Matrix3d RX,RY,RZ;
+    RX<<             1,             0,             0,
+                     0, qCos(rotateX),-qSin(rotateX),
+                     0, qSin(rotateX), qCos(rotateX);
+
+    RY<< qCos(rotateY),             0, qSin(rotateY),
+                     0,             1,             0,
+        -qSin(rotateY),             0, qCos(rotateY);
+
+    RZ<< qCos(rotateZ),-qSin(rotateZ),             0,
+         qSin(rotateZ), qCos(rotateZ),             0,
+                     0,             0,             1;
+    Eigen::Matrix3d r=RZ*RX*RY;
+    Eigen::Matrix3d t_p=Eigen::Matrix3d::Zero(3,3);
+    t_p(0,0)=1;t_p(1,1)=1;t_p(2,2)=1;
+    return r*t_p;
+}
 QVector<double> inverseKinematic::GetSpeed(double gyrox, double gyroy, double gyroz)
 {
     Eigen::Matrix3d Sw;

@@ -456,6 +456,9 @@ void Controller::IMUControlMode()
         TIMEBEGIN()
         analyseData();
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
+        qDebug()<<"accX: "<<accX<<" accY: "<<accY<<" accZ: "<<accZ;
+        qDebug()<<"ori acc z: "<<orientAccZ;
+        qDebug()<<"velX: "<<velX<<" velY: "<<velY<<" velZ: "<<velZ;
         qDebug()<<"disX: "<<disX<<" disY: "<<disY<<" disZ: "<<disZ;
 #if HARDLIMITS
         //GA_ClrSts(1,6); //it looks we needn't to clear state
@@ -627,6 +630,11 @@ void Controller::analyseData()
         accX=static_cast<int16_t>(((static_cast<uint8_t>(data3.at(2))<<8)|static_cast<uint8_t>(data3.at(1))))/32768.0*16.0*gra;
         accY=static_cast<int16_t>(((static_cast<uint8_t>(data3.at(4))<<8)|static_cast<uint8_t>(data3.at(3))))/32768.0*16.0*gra;
         accZ=static_cast<int16_t>(((static_cast<uint8_t>(data3.at(6))<<8)|static_cast<uint8_t>(data3.at(5))))/32768.0*16.0*gra;
+        auto dir=kinematicModule->GetOrientDir(angleX,angleY,0);
+        dir.col(0)*=accX;
+        dir.col(1)*=accY;
+        dir.col(2)*=accZ;
+        orientAccZ=dir.row(2).sum();
     }
     static bool onceFlag=false;
     if(data4.size())
@@ -646,9 +654,9 @@ void Controller::analyseData()
             disX=disX+velX*duration+0.5*accX*duration*duration;
             disY=disY+velY*duration+0.5*accY*duration*duration;
             disZ=disZ+velZ*duration+0.5*(accZ-gra)*duration*duration;
-            velX=duration*accX;
-            velY=duration*accY;
-            velZ=duration*(accZ-gra);
+            velX+=duration*accX;
+            velY+=duration*accY;
+            velZ+=duration*(accZ-gra);
         }
         else
         {
@@ -667,6 +675,7 @@ void Controller::sendData()
     {
         if(imuClient!=nullptr)
         {
+            data.remove(data.size()-2,2);
             for(int i=0;i<6;i++)
                 data.append(static_cast<char>(pid_regulator[i]->GetOutput()));
             for(int i=0;i<6;i++)
@@ -686,16 +695,32 @@ void Controller::sendData()
                 for(int j=0;j<4;j++)
                     data.append(static_cast<char>(static_cast<int32_t>(speed)>>(8*(3-j))));
             }
+            data2.remove(data2.size()-2,2);
             data.append(data2);
-            double accZmm=accZ*1000;
+            double accXmm=accX*1000,accYmm=accY*1000,accZmm=accZ*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(accXmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(accXmm)&0x00ff));
+            data.append(static_cast<char>(static_cast<int16_t>(accYmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(accYmm)&0x00ff));
             data.append(static_cast<char>(static_cast<int16_t>(accZmm)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(accZmm)&0x00ff));
-            double velZmm=velZ*1000;
+            double velXmm=velX*1000,velYmm=velY*1000,velZmm=velZ*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(velXmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(velXmm)&0x00ff));
+            data.append(static_cast<char>(static_cast<int16_t>(velYmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(velYmm)&0x00ff));
             data.append(static_cast<char>(static_cast<int16_t>(velZmm)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(velZmm)&0x00ff));
-            double disZmm=disZ*1000;
+            double disXmm=disX*1000,disYmm=disY*1000,disZmm=disZ*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(disXmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(disXmm)&0x00ff));
+            data.append(static_cast<char>(static_cast<int16_t>(disYmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(disYmm)&0x00ff));
             data.append(static_cast<char>(static_cast<int16_t>(disZmm)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(disZmm)&0x00ff));
+            double orientAccZmm=orientAccZ*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(orientAccZmm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(orientAccZmm)&0x00ff));
             imuClient->write(data);
         }
     }
