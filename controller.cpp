@@ -463,7 +463,7 @@ void Controller::IMUControlMode()
         analyseData();
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
         qDebug()<<"accX: "<<accX<<" accY: "<<accY<<" accZ: "<<accZ;
-        qDebug()<<"OrientAccZ: "<<orientAccZ;
+        qDebug()<<"OrientAccZ: "<<orientAccZ<<" after filter: "<<orientAccZ_AfterFilter;
         qDebug()<<"velX: "<<velX<<" velY: "<<velY<<" velZ: "<<velZ;
         qDebug()<<"disX: "<<disX<<" disY: "<<disY<<" disZ: "<<disZ;
 #if HARDLIMITS
@@ -641,6 +641,7 @@ void Controller::analyseData(bool calculateDis)
         dir.col(1)*=accY;
         dir.col(2)*=accZ;
         orientAccZ=dir.row(2).sum();
+        orientAccZ_AfterFilter=simpleKalman(orientAccZ,processNoise_Q,measureNoise_R);
     }
     static bool onceFlag=false;
     if(data4.size())
@@ -661,12 +662,12 @@ void Controller::analyseData(bool calculateDis)
                 //qDebug()<<"duration: "<<duration*1000;
                 //disX=disX+velX*duration+0.5*accX*duration*duration;
                 //disY=disY+velY*duration+0.5*accY*duration*duration;
-                if(!detector->DetectZero(orientAccZ))
+                if(!detector->DetectZero(orientAccZ_AfterFilter))
                 {
-                    disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
+                    disZ=disZ+velZ*duration+0.5*(orientAccZ_AfterFilter-staticAcc)*duration*duration;
                     //velX+=duration*accX;
                     //velY+=duration*accY;
-                    velZ+=duration*(orientAccZ-staticAcc);
+                    velZ+=duration*(orientAccZ_AfterFilter-staticAcc);
                 }
                 else
                 {
@@ -737,6 +738,12 @@ void Controller::sendData()
             double orientAccZmm=orientAccZ*1000;
             data.append(static_cast<char>(static_cast<int16_t>(orientAccZmm)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(orientAccZmm)&0x00ff));
+            double orientAccZmm_AfterFilter=orientAccZ_AfterFilter*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(orientAccZmm_AfterFilter)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(orientAccZmm_AfterFilter)&0x00ff));
+            double var_watch=detector->GetCurrentVar()*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(var_watch)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(var_watch)&0x00ff));
             imuClient->write(data);
         }
     }
@@ -764,8 +771,35 @@ void Controller::correctionGra()
     for(int i=0;i<times;i++)
     {
         analyseData(false);
-        sumAccZ+=accZ;
-        QThread::msleep(20);
+        sumAccZ+=orientAccZ;
+        QThread::msleep(40);
     }
     staticAcc=sumAccZ/times;
+}
+double Controller::simpleKalman(double ResrcData,double ProcessNiose_Q,double MeasureNoise_R)
+{
+    double R = MeasureNoise_R;
+        double Q = ProcessNiose_Q;
+
+        static double x_last;
+        double x_mid = x_last;
+        double x_now;
+
+        static double p_last;
+        double p_mid ;
+        double p_now;
+
+        double kg;
+
+        x_mid=x_last;                       //x_last=x(k-1|k-1),x_mid=x(k|k-1)
+        p_mid=p_last+Q;                     //p_mid=p(k|k-1),p_last=p(k-1|k-1)
+
+
+        kg=p_mid/(p_mid+R);
+        x_now=x_mid+kg*(ResrcData-x_mid);
+        p_now=(1-kg)*p_mid;
+        p_last = p_now;
+        x_last = x_now;
+
+        return x_now;
 }

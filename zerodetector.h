@@ -24,9 +24,9 @@ private:
     double dataTotalSum=0;
     int    dataCnt=0;
 
-    const double N=10;
-    const double varianThresh=0.5;
-    const double staticThresh=0.5;
+    const double N=50;
+    const double varianThresh=0.02;
+    const double staticThresh=0.1;
 };
 
 #endif // ZERODETECTOR_H

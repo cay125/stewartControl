@@ -68,6 +68,8 @@ public:
     void setDriverEnable(int addr, bool value);
     Status currentStatus=GUIControl;
 private:
+    const double processNoise_Q=0.1;
+    const double measureNoise_R=10;
     ZeroDetector *detector;
     QTimer *timer;
     modbusController *RS485;
@@ -85,9 +87,10 @@ private:
     QVector<double> refSpeed;
     ImuTime timeStamp;
     double gra=9.8,staticAcc=9.8;
-    double orientAccZ=0;
+    double orientAccZ=0,orientAccZ_AfterFilter=0;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0,accX=0,accY=0,accZ=0,velX=0,velY=0,velZ=0,disX=0,disY=0,disZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
+    double simpleKalman(double ResrcData,double ProcessNiose_Q,double MeasureNoise_R);
     void correctionGra();
     void GetZphasePos(int addr);
     void GetCurrentPos(int addr);
