@@ -9,7 +9,7 @@ QByteArray globalGyroArray;
 QByteArray globalTopAngleArray;
 QByteArray globalAccArray;
 QByteArray globalTimeArray;
-Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort)
+Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort),detector(new ZeroDetector)
 {
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
     stewartPara *para=new stewartPara(170, 80, 280, 47);
@@ -431,7 +431,7 @@ void Controller::IMUControlMode()
 {
     currentStatus=Status::IMUControl;
     initMode(2,2,5,MotionMode::TRAP);
-    analyseData();
+    analyseData(false);
     QVector<double> lens = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
     qDebug()<<"start move legs home";
     MoveLegs(lens);
@@ -450,6 +450,12 @@ void Controller::IMUControlMode()
             axis++;
     }
     qDebug()<<"move home finished";
+    qDebug()<<"wait for platform being stable..";
+    QThread::msleep(3000);
+    qDebug()<<"start correct gra";
+    correctionGra();
+    qDebug()<<"correct gra finished\nconrrection gravity is: "<<staticAcc;
+    detector->setStaticGra(staticAcc);
     initMode(3,3,10,MotionMode::JOG);
     connect(timer,&QTimer::timeout,this,[this]()
     {
@@ -457,7 +463,7 @@ void Controller::IMUControlMode()
         analyseData();
         qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
         qDebug()<<"accX: "<<accX<<" accY: "<<accY<<" accZ: "<<accZ;
-        qDebug()<<"ori acc z: "<<orientAccZ;
+        qDebug()<<"OrientAccZ: "<<orientAccZ;
         qDebug()<<"velX: "<<velX<<" velY: "<<velY<<" velZ: "<<velZ;
         qDebug()<<"disX: "<<disX<<" disY: "<<disY<<" disZ: "<<disZ;
 #if HARDLIMITS
@@ -605,7 +611,7 @@ void Controller::updatePosition(QByteArray data)
     }
     //qDebug()<<angleX<<" "<<angleY<<" "<<angleZ;
 }
-void Controller::analyseData()
+void Controller::analyseData(bool calculateDis)
 {
     imu_mutex.lock();
     auto data=globalByteArray;
@@ -649,14 +655,24 @@ void Controller::analyseData()
         t_stamp.ms=static_cast<int16_t>(((static_cast<uint8_t>(data4.at(8))<<8)|static_cast<uint8_t>(data4.at(7))));
         if(onceFlag)
         {
-            double duration=ImuTime::GetDuration(t_stamp,timeStamp)/1000.0;
-            qDebug()<<"duration: "<<duration*1000;
-            disX=disX+velX*duration+0.5*accX*duration*duration;
-            disY=disY+velY*duration+0.5*accY*duration*duration;
-            disZ=disZ+velZ*duration+0.5*(accZ-gra)*duration*duration;
-            velX+=duration*accX;
-            velY+=duration*accY;
-            velZ+=duration*(accZ-gra);
+            if(calculateDis)
+            {
+                double duration=ImuTime::GetDuration(t_stamp,timeStamp)/1000.0;
+                //qDebug()<<"duration: "<<duration*1000;
+                //disX=disX+velX*duration+0.5*accX*duration*duration;
+                //disY=disY+velY*duration+0.5*accY*duration*duration;
+                if(!detector->DetectZero(orientAccZ))
+                {
+                    disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
+                    //velX+=duration*accX;
+                    //velY+=duration*accY;
+                    velZ+=duration*(orientAccZ-staticAcc);
+                }
+                else
+                {
+                    velZ=0;
+                }
+            }
         }
         else
         {
@@ -744,12 +760,12 @@ int ImuTime::GetDuration(ImuTime new_stamp,ImuTime old_stamp)
 void Controller::correctionGra()
 {
     double sumAccZ=0;
-    int times=20;
+    int times=100;
     for(int i=0;i<times;i++)
     {
-        analyseData();
+        analyseData(false);
         sumAccZ+=accZ;
-        QThread::msleep(25);
+        QThread::msleep(20);
     }
-    gra=sumAccZ/times;
+    staticAcc=sumAccZ/times;
 }

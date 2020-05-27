@@ -5,6 +5,7 @@
 #include "serialport.h"
 #include "inversekinematic.h"
 #include "pidcontroller.h"
+#include "zerodetector.h"
 #include <QString>
 #include <QTimer>
 #include <QModbusClient>
@@ -67,6 +68,7 @@ public:
     void setDriverEnable(int addr, bool value);
     Status currentStatus=GUIControl;
 private:
+    ZeroDetector *detector;
     QTimer *timer;
     modbusController *RS485;
     QTcpServer *tcpServer;
@@ -82,7 +84,7 @@ private:
     QVector<double> refPos;
     QVector<double> refSpeed;
     ImuTime timeStamp;
-    double gra=9.8;
+    double gra=9.8,staticAcc=9.8;
     double orientAccZ=0;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0,accX=0,accY=0,accZ=0,velX=0,velY=0,velZ=0,disX=0,disY=0,disZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
@@ -97,7 +99,7 @@ private:
     void updateAxis(int start, int end);
     void updatePosition(QByteArray);
     void sendData();
-    void analyseData();
+    void analyseData(bool calculateDis=true);
     void initMode(double acc=1,double dec=1,double speed=1,MotionMode mode=MotionMode::TRAP);
 private slots:
     void timerSlot();

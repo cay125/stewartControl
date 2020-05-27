@@ -23,7 +23,8 @@ SOURCES += \
         main.cpp \
         modbuscontroller.cpp \
         pidcontroller.cpp \
-        serialport.cpp
+        serialport.cpp \
+        zerodetector.cpp
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -36,7 +37,8 @@ HEADERS += \
     inversekinematic.h \
     modbuscontroller.h \
     pidcontroller.h \
-    serialport.h
+    serialport.h \
+    zerodetector.h
 
 INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/
 
