@@ -1,4 +1,5 @@
 #include "serialport.h"
+#include "inversekinematic.h"
 #include "controller.h"
 #include <QSerialPortInfo>
 #include <utility>
@@ -105,6 +106,9 @@ uint16_t SerialPort::calcCRC16()
 void SerialPort::handle_data()
 {
     static std::pair<int,recieveType> state(0, recieveType::angle);
+    static double angleX=0,angleY=0,angleZ=0,disZ=0,velZ=0,staticAcc=0;
+    static bool isCorrectedGra=false;
+
     auto data=port->readAll();
     if(displayClient!=nullptr)
         displayClient->write(data);
@@ -158,14 +162,66 @@ void SerialPort::handle_data()
                 //emit receive_data(pointData);
                 imu_mutex.lock();
                 if(state.second==recieveType::angle)
+                {
                     globalByteArray=pointData;
+                    imu_mutex.unlock();
+                    angleX=static_cast<int16_t>(((static_cast<uint8_t>(pointData.at(2))<<8)|static_cast<uint8_t>(pointData.at(1))))/32768.0*180.0;
+                    angleY=static_cast<int16_t>(((static_cast<uint8_t>(pointData.at(4))<<8)|static_cast<uint8_t>(pointData.at(3))))/32768.0*180.0;
+                    angleZ=static_cast<int16_t>(((static_cast<uint8_t>(pointData.at(6))<<8)|static_cast<uint8_t>(pointData.at(5))))/32768.0*180.0;
+                }
                 else if(state.second==recieveType::gyro)
-                    globalGyroArray=pointData;
+                {globalGyroArray=pointData;imu_mutex.unlock();}
                 else if(state.second==recieveType::acc)
+                {
                     globalAccArray=pointData;
+                    imu_mutex.unlock();
+                    double accX=static_cast<int16_t>(((static_cast<uint8_t>(pointData.at(2))<<8)|static_cast<uint8_t>(pointData.at(1))))/32768.0*16.0*9.8;
+                    double accY=static_cast<int16_t>(((static_cast<uint8_t>(pointData.at(4))<<8)|static_cast<uint8_t>(pointData.at(3))))/32768.0*16.0*9.8;
+                    double accZ=static_cast<int16_t>(((static_cast<uint8_t>(pointData.at(6))<<8)|static_cast<uint8_t>(pointData.at(5))))/32768.0*16.0*9.8;
+                    if(isCorrectedGra)
+                    {
+                        auto dir=inverseKinematic::GetOrientDir(angleX,angleY,0);
+                        dir.col(0)*=accX;
+                        dir.col(1)*=accY;
+                        dir.col(2)*=accZ;
+                        double orientAccZ=dir.row(2).sum();
+                        const double duration=5.0/1000;
+                        disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
+                        velZ+=duration*(orientAccZ-staticAcc);
+                        imu_mutex.lock();
+                        globalDisZ=disZ;
+                        globalVelZ=velZ;
+                        imu_mutex.unlock();
+                    }
+                    else
+                    {
+                        imu_mutex.lock();
+                        if(globalStaticGravity>1)
+                        {
+                            isCorrectedGra=true;
+                            staticAcc=globalStaticGravity;
+                        }
+                        auto dir=inverseKinematic::GetOrientDir(angleX,angleY,0);
+                        dir.col(0)*=accX;
+                        dir.col(1)*=accY;
+                        dir.col(2)*=accZ;
+                        double orientAccZ=dir.row(2).sum();
+                        const double duration=5.0/1000;
+                        disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
+                        velZ+=duration*(orientAccZ-staticAcc);
+                        globalDisZ=disZ;
+                        globalVelZ=velZ;
+                        imu_mutex.unlock();
+                    }
+                }
                 else if(state.second==recieveType::time_stamp)
-                    globalTimeArray=pointData;
-                imu_mutex.unlock();
+                {globalTimeArray=pointData;imu_mutex.unlock();}
+                else
+                {
+                    imu_mutex.unlock();
+                    qDebug()<<"error:unrecognize data!!\n program will exit";
+                    exit(1);
+                }
             }
         }
     }

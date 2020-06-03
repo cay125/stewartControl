@@ -40,6 +40,7 @@ extern QByteArray globalGyroArray;
 extern QByteArray globalTopAngleArray;
 extern QByteArray globalAccArray;
 extern QByteArray globalTimeArray;
+extern double globalVelZ,globalDisZ,globalStaticGravity;
 
 enum Status{Simple,GUIControl,IMUControl};
 enum MotionMode{JOG,TRAP};

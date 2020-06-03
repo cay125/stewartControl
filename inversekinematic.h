@@ -21,7 +21,7 @@ public:
     QVector<double> GetSpeed(double gyrox,double gyroy,double gyroz);
     qint64 Len2Pulse(double);
     qint64 Speed2Pulse(double);
-    Eigen::Matrix3d GetOrientDir(double rotateX,double rotateY,double rotateZ);
+    static Eigen::Matrix3d GetOrientDir(double rotateX,double rotateY,double rotateZ);
     Eigen::Matrix3d rotation3D(double angle, Eigen::Vector3d axis);
     stewartPara *para;
 private:

@@ -9,6 +9,7 @@ QByteArray globalGyroArray;
 QByteArray globalTopAngleArray;
 QByteArray globalAccArray;
 QByteArray globalTimeArray;
+double globalVelZ=0,globalDisZ=0,globalStaticGravity=0;
 int ImuTime::timeStampUntilNow=0;
 Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort),detector(new ZeroDetector)
 {
@@ -754,6 +755,13 @@ void Controller::sendData()
             double disZ_AfterMinSquremm=disZ_AfterMinSqure*1000;
             data.append(static_cast<char>(static_cast<int16_t>(disZ_AfterMinSquremm)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(disZ_AfterMinSquremm)&0x00ff));
+            imu_mutex.lock();
+            double velZ_othermm=globalVelZ*1000,disZ_othermm=globalDisZ*1000;
+            imu_mutex.unlock();
+            data.append(static_cast<char>(static_cast<int16_t>(velZ_othermm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(velZ_othermm)&0x00ff));
+            data.append(static_cast<char>(static_cast<int16_t>(disZ_othermm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(disZ_othermm)&0x00ff));
             imuClient->write(data);
         }
     }
@@ -789,6 +797,9 @@ void Controller::correctionGra()
         QThread::msleep(40);
     }
     staticAcc=sumAccZ/times;
+    imu_mutex.lock();
+    globalStaticGravity=staticAcc;
+    imu_mutex.unlock();
 #if !ZUPT
     for(int i=0;i<times;i++)
     {
