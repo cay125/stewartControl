@@ -9,6 +9,7 @@ QByteArray globalGyroArray;
 QByteArray globalTopAngleArray;
 QByteArray globalAccArray;
 QByteArray globalTimeArray;
+int ImuTime::timeStampUntilNow=0;
 Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort),detector(new ZeroDetector)
 {
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
@@ -660,19 +661,22 @@ void Controller::analyseData(bool calculateDis)
             {
                 double duration=ImuTime::GetDuration(t_stamp,timeStamp)/1000.0;
                 //qDebug()<<"duration: "<<duration*1000;
-                //disX=disX+velX*duration+0.5*accX*duration*duration;
-                //disY=disY+velY*duration+0.5*accY*duration*duration;
+#if ZUPT
                 if(!detector->DetectZero(orientAccZ_AfterFilter))
                 {
                     disZ=disZ+velZ*duration+0.5*(orientAccZ_AfterFilter-staticAcc)*duration*duration;
-                    //velX+=duration*accX;
-                    //velY+=duration*accY;
                     velZ+=duration*(orientAccZ_AfterFilter-staticAcc);
                 }
                 else
                 {
                     velZ=0;
                 }
+#else
+                disZ=disZ+velZ*duration+0.5*(orientAccZ_AfterFilter-staticAcc)*duration*duration;
+                velZ+=duration*(orientAccZ_AfterFilter-staticAcc);
+                disZ_AfterMinSqure=disSolver->calculate(disZ,ImuTime::timeStampUntilNow);
+                velZ_AfterMinSqure=velSolver->calculate(velZ,ImuTime::timeStampUntilNow);
+#endif
             }
         }
         else
@@ -744,10 +748,17 @@ void Controller::sendData()
             double var_watch=detector->GetCurrentVar()*1000;
             data.append(static_cast<char>(static_cast<int16_t>(var_watch)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(var_watch)&0x00ff));
+            double velZ_AfterMinSquremm=velZ_AfterMinSqure*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(velZ_AfterMinSquremm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(velZ_AfterMinSquremm)&0x00ff));
+            double disZ_AfterMinSquremm=disZ_AfterMinSqure*1000;
+            data.append(static_cast<char>(static_cast<int16_t>(disZ_AfterMinSquremm)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(disZ_AfterMinSquremm)&0x00ff));
             imuClient->write(data);
         }
     }
 }
+
 int ImuTime::GetDuration(ImuTime new_stamp,ImuTime old_stamp)
 {
     if(new_stamp.year>old_stamp.year)
@@ -762,12 +773,15 @@ int ImuTime::GetDuration(ImuTime new_stamp,ImuTime old_stamp)
         new_stamp.seconds+=60*(new_stamp.minite-old_stamp.minite);
     if(new_stamp.seconds>old_stamp.seconds)
         new_stamp.ms+=1000*(new_stamp.seconds-old_stamp.seconds);
+    ImuTime::timeStampUntilNow+=new_stamp.ms-old_stamp.ms;
     return new_stamp.ms-old_stamp.ms;
 }
 void Controller::correctionGra()
 {
     double sumAccZ=0;
-    int times=100;
+    int times=120;
+    disSolver=new minsqureSolver(times,3);
+    velSolver=new minsqureSolver(times,2);
     for(int i=0;i<times;i++)
     {
         analyseData(false);
@@ -775,31 +789,42 @@ void Controller::correctionGra()
         QThread::msleep(40);
     }
     staticAcc=sumAccZ/times;
+#if !ZUPT
+    for(int i=0;i<times;i++)
+    {
+        analyseData(true);
+        disSolver->addData({ImuTime::timeStampUntilNow/1000.0*ImuTime::timeStampUntilNow/1000.0,ImuTime::timeStampUntilNow/1000.0,1},disZ,i);
+        velSolver->addData({ImuTime::timeStampUntilNow/1000.0,1},velZ,i);
+        QThread::msleep(100);
+    }
+    disSolver->solveParams();
+    velSolver->solveParams();
+#endif
 }
 double Controller::simpleKalman(double ResrcData,double ProcessNiose_Q,double MeasureNoise_R)
 {
     double R = MeasureNoise_R;
-        double Q = ProcessNiose_Q;
+    double Q = ProcessNiose_Q;
 
-        static double x_last;
-        double x_mid = x_last;
-        double x_now;
+    static double x_last;
+    double x_mid = x_last;
+    double x_now;
 
-        static double p_last;
-        double p_mid ;
-        double p_now;
+    static double p_last;
+    double p_mid ;
+    double p_now;
 
-        double kg;
+    double kg;
 
-        x_mid=x_last;                       //x_last=x(k-1|k-1),x_mid=x(k|k-1)
-        p_mid=p_last+Q;                     //p_mid=p(k|k-1),p_last=p(k-1|k-1)
+    x_mid=x_last;                       //x_last=x(k-1|k-1),x_mid=x(k|k-1)
+    p_mid=p_last+Q;                     //p_mid=p(k|k-1),p_last=p(k-1|k-1)
 
 
-        kg=p_mid/(p_mid+R);
-        x_now=x_mid+kg*(ResrcData-x_mid);
-        p_now=(1-kg)*p_mid;
-        p_last = p_now;
-        x_last = x_now;
+    kg=p_mid/(p_mid+R);
+    x_now=x_mid+kg*(ResrcData-x_mid);
+    p_now=(1-kg)*p_mid;
+    p_last = p_now;
+    x_last = x_now;
 
-        return x_now;
+    return x_now;
 }

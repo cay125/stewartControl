@@ -6,6 +6,7 @@
 #include "inversekinematic.h"
 #include "pidcontroller.h"
 #include "zerodetector.h"
+#include "minsquresolver.h"
 #include <QString>
 #include <QTimer>
 #include <QModbusClient>
@@ -21,6 +22,7 @@
 #define HARDLIMITS 1
 #define SHOW_CYCLE_TIME 1
 #define MULTI_VEL 1
+#define ZUPT 0
 #define TIMEBEGIN() {\
                         auto time1=std::chrono::steady_clock::now();
 #define TIMEEND(PARA) \
@@ -51,6 +53,7 @@ public:
     int minite=0;
     int seconds=0;
     int ms=0;
+    static int timeStampUntilNow;
     static int GetDuration(ImuTime new_stamp,ImuTime old_stamp);
 };
 
@@ -70,6 +73,7 @@ public:
 private:
     const double processNoise_Q=0.1;
     const double measureNoise_R=10;
+    minsqureSolver *disSolver=nullptr,*velSolver=nullptr;
     ZeroDetector *detector;
     QTimer *timer;
     modbusController *RS485;
@@ -88,6 +92,7 @@ private:
     ImuTime timeStamp;
     double gra=9.8,staticAcc=9.8;
     double orientAccZ=0,orientAccZ_AfterFilter=0;
+    double disZ_AfterMinSqure=0,velZ_AfterMinSqure=0;
     double angleX=0,angleY=0,angleZ=0,gyroX=0,gyroY=0,gyroZ=0,accX=0,accY=0,accZ=0,velX=0,velY=0,velZ=0,disX=0,disY=0,disZ=0;
     double currentX=0,currentY=0,currentZ=0,currentRx=0,currentRy=0,currentRz=0;
     double simpleKalman(double ResrcData,double ProcessNiose_Q,double MeasureNoise_R);

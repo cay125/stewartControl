@@ -21,6 +21,7 @@ SOURCES += \
         controller.cpp \
         inversekinematic.cpp \
         main.cpp \
+        minsquresolver.cpp \
         modbuscontroller.cpp \
         pidcontroller.cpp \
         serialport.cpp \
@@ -35,6 +36,7 @@ HEADERS += \
     GAS_N.h \
     controller.h \
     inversekinematic.h \
+    minsquresolver.h \
     modbuscontroller.h \
     pidcontroller.h \
     serialport.h \
