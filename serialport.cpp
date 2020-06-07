@@ -200,17 +200,17 @@ void SerialPort::handle_data()
                         {
                             isCorrectedGra=true;
                             staticAcc=globalStaticGravity;
+                            auto dir=inverseKinematic::GetOrientDir(angleX,angleY,0);
+                            dir.col(0)*=accX;
+                            dir.col(1)*=accY;
+                            dir.col(2)*=accZ;
+                            double orientAccZ=dir.row(2).sum();
+                            const double duration=5.0/1000;
+                            disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
+                            velZ+=duration*(orientAccZ-staticAcc);
+                            globalDisZ=disZ;
+                            globalVelZ=velZ;
                         }
-                        auto dir=inverseKinematic::GetOrientDir(angleX,angleY,0);
-                        dir.col(0)*=accX;
-                        dir.col(1)*=accY;
-                        dir.col(2)*=accZ;
-                        double orientAccZ=dir.row(2).sum();
-                        const double duration=5.0/1000;
-                        disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
-                        velZ+=duration*(orientAccZ-staticAcc);
-                        globalDisZ=disZ;
-                        globalVelZ=velZ;
                         imu_mutex.unlock();
                     }
                 }

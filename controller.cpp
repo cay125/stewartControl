@@ -673,8 +673,8 @@ void Controller::analyseData(bool calculateDis)
                     velZ=0;
                 }
 #else
-                disZ=disZ+velZ*duration+0.5*(orientAccZ_AfterFilter-staticAcc)*duration*duration;
-                velZ+=duration*(orientAccZ_AfterFilter-staticAcc);
+                disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
+                velZ+=duration*(orientAccZ-staticAcc);
                 disZ_AfterMinSqure=disSolver->calculate(disZ,ImuTime::timeStampUntilNow);
                 velZ_AfterMinSqure=velSolver->calculate(velZ,ImuTime::timeStampUntilNow);
 #endif
