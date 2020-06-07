@@ -24,6 +24,7 @@ SOURCES += \
         minsquresolver.cpp \
         modbuscontroller.cpp \
         pidcontroller.cpp \
+        poseestimation2d2d.cpp \
         serialport.cpp \
         zerodetector.cpp
 
@@ -39,9 +40,26 @@ HEADERS += \
     minsquresolver.h \
     modbuscontroller.h \
     pidcontroller.h \
+    poseestimation2d2d.h \
     serialport.h \
     zerodetector.h
 
 INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/
+
+laptop{
+    message('build in laptop')
+    INCLUDEPATH += C:\MySoftware\opencv3.4.3\opencv\build\include\
+                   C:\MySoftware\opencv3.4.3\opencv\build\include\opencv\
+                   C:\MySoftware\opencv3.4.3\opencv\build\include\opencv2\
+    LIBS += C:\MySoftware\opencv3.4.3\opencv\build\x64\vc15\lib\opencv_world343.lib
+    LIBS += C:\MySoftware\opencv3.4.3\opencv\build\x64\vc15\lib\opencv_world343d.lib
+}else{
+    message('build in host PC')
+    INCLUDEPATH += C:\MySoftware\opencv3.4.5\opencv\build\include\
+                   C:\MySoftware\opencv3.4.5\opencv\build\include\opencv\
+                   C:\MySoftware\opencv3.4.5\opencv\build\include\opencv2\
+    LIBS += C:\MySoftware\opencv3.4.5\opencv\build\x64\vc15\lib\opencv_world345.lib
+    LIBS += C:\MySoftware\opencv3.4.5\opencv\build\x64\vc15\lib\opencv_world345d.lib
+}
 
 LIBS += ../stewartControl/GAS.lib
