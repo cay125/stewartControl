@@ -7,6 +7,7 @@
 #include "pidcontroller.h"
 #include "zerodetector.h"
 #include "minsquresolver.h"
+#include "imgprocessthread.h"
 #include <QString>
 #include <QTimer>
 #include <QModbusClient>
@@ -34,6 +35,7 @@
 
 extern QMutex m_mutex;
 extern QMutex imu_mutex;
+extern QMutex frame_mutex;
 extern QWaitCondition m_cond;
 extern QByteArray globalByteArray;
 extern QByteArray globalGyroArray;
@@ -41,6 +43,7 @@ extern QByteArray globalTopAngleArray;
 extern QByteArray globalAccArray;
 extern QByteArray globalTimeArray;
 extern double globalVelZ,globalDisZ,globalStaticGravity;
+extern cv::Mat FrameRotation,FrameTranslation;
 
 enum Status{Simple,GUIControl,IMUControl};
 enum MotionMode{JOG,TRAP};
@@ -66,6 +69,7 @@ public:
     void simpleOperationMode();
     void GuiControlMode();
     void IMUControlMode();
+    void StartFrameProcess(int method);
     [[noreturn]] void simpleTrajectory(int mode=0);
     void resetAll();
     void resetAll(int start, int end);
@@ -74,6 +78,7 @@ public:
 private:
     const double processNoise_Q=0.1;
     const double measureNoise_R=10;
+    ImgProcessThread *processThread=nullptr;
     minsqureSolver *disSolver=nullptr,*velSolver=nullptr;
     ZeroDetector *detector;
     QTimer *timer;

@@ -3,6 +3,7 @@
 #include "GAS_N.h"
 QMutex m_mutex;
 QMutex imu_mutex;
+QMutex frame_mutex;
 QWaitCondition m_cond;
 QByteArray globalByteArray;
 QByteArray globalGyroArray;
@@ -10,6 +11,7 @@ QByteArray globalTopAngleArray;
 QByteArray globalAccArray;
 QByteArray globalTimeArray;
 double globalVelZ=0,globalDisZ=0,globalStaticGravity=0;
+cv::Mat FrameRotation,FrameTranslation;
 int ImuTime::timeStampUntilNow=0;
 Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort),detector(new ZeroDetector)
 {
@@ -838,4 +840,12 @@ double Controller::simpleKalman(double ResrcData,double ProcessNiose_Q,double Me
     x_last = x_now;
 
     return x_now;
+}
+void Controller::StartFrameProcess(int method)
+{
+    if(processThread)
+        return;
+    processThread=new ImgProcessThread(method);
+    qDebug()<<"start img process";
+    processThread->start();
 }

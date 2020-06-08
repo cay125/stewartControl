@@ -18,7 +18,9 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+        MVCamera/MVCamera.cpp \
         controller.cpp \
+        imgprocessthread.cpp \
         inversekinematic.cpp \
         main.cpp \
         minsquresolver.cpp \
@@ -36,6 +38,7 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 HEADERS += \
     GAS_N.h \
     controller.h \
+    imgprocessthread.h \
     inversekinematic.h \
     minsquresolver.h \
     modbuscontroller.h \
@@ -45,6 +48,8 @@ HEADERS += \
     zerodetector.h
 
 INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/
+INCLUDEPATH += MVCamera\
+               MVCamera\DriverInclude
 
 laptop{
     message('build in laptop')
@@ -63,3 +68,4 @@ laptop{
 }
 
 LIBS += ../stewartControl/GAS.lib
+LIBS += ../stewartControl/MVCamera/MVCAMSDK_X64.lib

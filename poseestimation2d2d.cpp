@@ -97,7 +97,7 @@ QVector<cv::Mat> PoseEstimation::GetPose2d2d(cv::Mat& img1, cv::Mat& img2)
     std::vector<cv::KeyPoint> keypoints_1, keypoints_2;
     std::vector<cv::DMatch> matches;
     find_feature_matches(img1, img2, keypoints_1, keypoints_2, matches);
-    std::cout << "一共找到了" << matches.size() << "组匹配点" << std::endl;
+    std::cout << "PoseEstimation: find " << matches.size() << " pair key points" << std::endl;
 
     //-- 估计两张图像间运动
     cv::Mat R, t;
