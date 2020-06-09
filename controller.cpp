@@ -1,5 +1,6 @@
 #include <iostream>
 #include "controller.h"
+#include "timemeasure.h"
 #include "GAS_N.h"
 QMutex m_mutex;
 QMutex imu_mutex;
@@ -764,6 +765,13 @@ void Controller::sendData()
             data.append(static_cast<char>(static_cast<int16_t>(velZ_othermm)&0x00ff));
             data.append(static_cast<char>(static_cast<int16_t>(disZ_othermm)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(disZ_othermm)&0x00ff));
+            double zTrans=0;
+            frame_mutex.lock();
+            if(!FrameTranslation.empty())
+                zTrans=FrameTranslation.at<double>(1,0)*1000;
+            frame_mutex.unlock();
+            data.append(static_cast<char>(static_cast<int16_t>(zTrans)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(zTrans)&0x00ff));
             imuClient->write(data);
         }
     }

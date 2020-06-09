@@ -41,11 +41,11 @@ void ImgProcessThread::run()
 {
     cv::Mat srcImg;
     cv::Mat preImg;
+    GetFrame(srcImg);
     while(GetFrame(srcImg))
     {
         std::reverse(srcImg.data,srcImg.data+srcImg.cols*srcImg.rows*3);
         cv::imshow("src",srcImg);
-        cv::waitKey(2);
         if(!preImg.empty())
         {
             auto mats=estimation_module.GetPose2d2d(preImg,srcImg);
@@ -53,8 +53,10 @@ void ImgProcessThread::run()
             FrameRotation=mats[0];
             FrameTranslation=mats[1];
             frame_mutex.unlock();
+            cv::imshow("pre",preImg);
         }
-        preImg=srcImg;
+        cv::waitKey(2);
+        preImg=srcImg.clone();
     }
     qDebug()<<"image thread finished";
 }

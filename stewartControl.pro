@@ -45,6 +45,7 @@ HEADERS += \
     pidcontroller.h \
     poseestimation2d2d.h \
     serialport.h \
+    timemeasure.h \
     zerodetector.h
 
 INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/

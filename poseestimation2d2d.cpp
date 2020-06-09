@@ -1,6 +1,7 @@
 #include <vector>
 #include <iostream>
 #include "poseestimation2d2d.h"
+#include "timemeasure.h"
 
 using namespace cv;
 PoseEstimation::PoseEstimation()
@@ -42,8 +43,8 @@ static void find_feature_matches(const Mat& img_1, const Mat& img_2, std::vector
         if (dist > max_dist) max_dist = dist;
     }
 
-    printf("-- Max dist : %f \n", max_dist);
-    printf("-- Min dist : %f \n", min_dist);
+    //printf("-- Max dist : %f \n", max_dist);
+    //printf("-- Min dist : %f \n", min_dist);
 
     //当描述子之间的距离大于两倍的最小距离时,即认为匹配有误.但有时候最小距离会非常小,设置一个经验值30作为下限.
     for (int i = 0; i < descriptors_1.rows; i++)
@@ -54,7 +55,7 @@ static void find_feature_matches(const Mat& img_1, const Mat& img_2, std::vector
         }
     }
 }
-static void pose_estimation_2d2d(std::vector<KeyPoint> keypoints_1, std::vector<KeyPoint> keypoints_2, std::vector< DMatch > matches, Mat& R, Mat& t)
+static void pose_estimation_2d2d(std::vector<KeyPoint>& keypoints_1, std::vector<KeyPoint>& keypoints_2, std::vector< DMatch >& matches, Mat& R, Mat& t)
 {
     // 相机内参,TUM Freiburg2
     Mat K = (Mat_<double>(3, 3) << 520.9, 0, 325.1, 0, 521.0, 249.7, 0, 0, 1);
@@ -69,26 +70,16 @@ static void pose_estimation_2d2d(std::vector<KeyPoint> keypoints_1, std::vector<
         points2.push_back(keypoints_2[matches[i].trainIdx].pt);
     }
 
-    //-- 计算基础矩阵
-    Mat fundamental_matrix;
-    fundamental_matrix = findFundamentalMat(points1, points2, CV_FM_8POINT);
-    std::cout << "fundamental_matrix is " << std::endl << fundamental_matrix << std::endl;
-
     //-- 计算本质矩阵
     Point2d principal_point(325.1, 249.7);	//相机光心, TUM dataset标定值
     double focal_length = 521;			//相机焦距, TUM dataset标定值
     Mat essential_matrix;
     essential_matrix = findEssentialMat(points1, points2, focal_length, principal_point);
-    std::cout << "essential_matrix is " << std::endl << essential_matrix << std::endl;
-
-    //-- 计算单应矩阵
-    Mat homography_matrix;
-    homography_matrix = findHomography(points1, points2, RANSAC, 3);
-    std::cout << "homography_matrix is " << std::endl << homography_matrix << std::endl;
+    //std::cout << "essential_matrix is " << std::endl << essential_matrix << std::endl;
 
     //-- 从本质矩阵中恢复旋转和平移信息.
     recoverPose(essential_matrix, points1, points2, R, t, focal_length, principal_point);
-    std::cout << "R is " << std::endl << R << std::endl;
+    //std::cout << "R is " << std::endl << R << std::endl;
     std::cout << "t is " << std::endl << t << std::endl;
 
 }
@@ -96,12 +87,16 @@ QVector<cv::Mat> PoseEstimation::GetPose2d2d(cv::Mat& img1, cv::Mat& img2)
 {
     std::vector<cv::KeyPoint> keypoints_1, keypoints_2;
     std::vector<cv::DMatch> matches;
+    TIMEBEGIN()
     find_feature_matches(img1, img2, keypoints_1, keypoints_2, matches);
+    TIMEEND("find feature matches")
     std::cout << "PoseEstimation: find " << matches.size() << " pair key points" << std::endl;
 
     //-- 估计两张图像间运动
     cv::Mat R, t;
+    TIMEBEGIN()
     pose_estimation_2d2d(keypoints_1, keypoints_2, matches, R, t);
+    TIMEEND("pose eatimation")
     QVector<cv::Mat> res;
     res.push_back(R);
     res.push_back(t);
