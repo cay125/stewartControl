@@ -51,22 +51,10 @@ HEADERS += \
 INCLUDEPATH += ThirdParty/eigen-eigen-323c052e1731/
 INCLUDEPATH += MVCamera\
                MVCamera\DriverInclude
-
-laptop{
-    message('build in laptop')
-    INCLUDEPATH += C:\MySoftware\opencv3.4.3\opencv\build\include\
-                   C:\MySoftware\opencv3.4.3\opencv\build\include\opencv\
-                   C:\MySoftware\opencv3.4.3\opencv\build\include\opencv2\
-    LIBS += C:\MySoftware\opencv3.4.3\opencv\build\x64\vc15\lib\opencv_world343.lib
-    LIBS += C:\MySoftware\opencv3.4.3\opencv\build\x64\vc15\lib\opencv_world343d.lib
-}else{
-    message('build in host PC')
-    INCLUDEPATH += C:\MySoftware\opencv3.4.5\opencv\build\include\
-                   C:\MySoftware\opencv3.4.5\opencv\build\include\opencv\
-                   C:\MySoftware\opencv3.4.5\opencv\build\include\opencv2\
-    LIBS += C:\MySoftware\opencv3.4.5\opencv\build\x64\vc15\lib\opencv_world345.lib
-    LIBS += C:\MySoftware\opencv3.4.5\opencv\build\x64\vc15\lib\opencv_world345d.lib
-}
+INCLUDEPATH += C:\MySoftware\opencv3.4.3\opencv\build\include\
+               C:\MySoftware\opencv3.4.3\opencv\build\include\opencv\
+               C:\MySoftware\opencv3.4.3\opencv\build\include\opencv2\
 
 LIBS += ../stewartControl/GAS.lib
 LIBS += ../stewartControl/MVCamera/MVCAMSDK_X64.lib
+LIBS += C:/MySoftware/opencv3.4.3/opencv/build/x64/vc15/lib/opencv_world343.lib
