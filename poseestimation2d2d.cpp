@@ -1,5 +1,6 @@
 #include <vector>
 #include <iostream>
+#include <opencv2/imgproc.hpp>
 #include "poseestimation2d2d.h"
 #include "timemeasure.h"
 
@@ -54,6 +55,11 @@ static void find_feature_matches(const Mat& img_1, const Mat& img_2, std::vector
             matches.push_back(match[i]);
         }
     }
+#if __SHOW_DEBUG_IMG
+    Mat out;
+    drawMatches(img_1,keypoints_1,img_2,keypoints_2,matches,out);
+    imshow("match",out);
+#endif
 }
 static void pose_estimation_2d2d(std::vector<KeyPoint>& keypoints_1, std::vector<KeyPoint>& keypoints_2, std::vector< DMatch >& matches, Mat& R, Mat& t)
 {
@@ -71,8 +77,8 @@ static void pose_estimation_2d2d(std::vector<KeyPoint>& keypoints_1, std::vector
     }
 
     //-- 计算本质矩阵
-    Point2d principal_point(325.1, 249.7);	//相机光心, TUM dataset标定值
-    double focal_length = 521;			//相机焦距, TUM dataset标定值
+    Point2d principal_point(396, 240);	//相机光心, TUM dataset标定值
+    double focal_length = 695;			//相机焦距, TUM dataset标定值
     Mat essential_matrix;
     essential_matrix = findEssentialMat(points1, points2, focal_length, principal_point);
     //std::cout << "essential_matrix is " << std::endl << essential_matrix << std::endl;
@@ -91,6 +97,12 @@ QVector<cv::Mat> PoseEstimation::GetPose2d2d(cv::Mat& img1, cv::Mat& img2)
     find_feature_matches(img1, img2, keypoints_1, keypoints_2, matches);
     TIMEEND("find feature matches")
     std::cout << "PoseEstimation: find " << matches.size() << " pair key points" << std::endl;
+#if __SHOW_DEBUG_IMG
+    for(auto& kp:keypoints_1)
+        cv::circle(img1,kp.pt,5,cv::Scalar(10,100,10));
+    for(auto& kp:keypoints_2)
+        cv::circle(img2,kp.pt,5,cv::Scalar(100,10,10));
+#endif
 
     //-- 估计两张图像间运动
     cv::Mat R, t;

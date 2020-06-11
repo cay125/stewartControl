@@ -7,6 +7,9 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include <QVector>
 
+#define __SHOW_SRC__ 1
+#define __SHOW_DEBUG_IMG 0
+
 class PoseEstimation
 {
 public:
