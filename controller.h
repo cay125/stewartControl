@@ -63,7 +63,7 @@ public:
     void GuiControlMode();
     void IMUControlMode();
     void StartFrameProcess(int method);
-    [[noreturn]] void simpleTrajectory(int mode=0);
+    void simpleTrajectory(int mode=0);
     void resetAll();
     void resetAll(int start, int end);
     void setDriverEnable(int addr, bool value);
@@ -109,7 +109,6 @@ private:
     void analyseData(bool calculateDis=true);
     void initMode(double acc=1,double dec=1,double speed=1,MotionMode mode=MotionMode::TRAP);
 private slots:
-    void timerSlot();
     void tcpReadDataSlot();
 signals:
     void sendReadRequestSignal(int addr, int startAddr, quint16 size);

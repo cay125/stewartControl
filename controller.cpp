@@ -116,65 +116,64 @@ void Controller::simpleOperationMode()
         return;
     }
 
-    connect(timer,&QTimer::timeout,this,&Controller::timerSlot);
+    connect(timer,&QTimer::timeout,this,[this]()
+    {
+        short axis=6;
+        long status=0;
+        if(GA_GetSts(axis,&status))
+        {
+            qDebug()<<"read status failed";
+            GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
+            return;
+        }
+        if(status & AXIS_STATUS_RUNNING)
+        {
+            qDebug()<<"running";
+            return;
+        }
+        double pos;static int cnt=0;
+        if(GA_GetAxisPrfPos(axis,&pos))
+        {
+            qDebug()<<"read pos failed";
+            GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
+            return;
+        }
+        if(cnt%2)
+        {
+            if(GA_SetPos(axis,pos+10))
+            {
+                qDebug()<<"set pos failed";
+                GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
+                return;
+            }
+            if(GA_Update(0x0001<<(axis-1)))
+            {
+                qDebug()<<"update failed";
+                GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
+                return;
+            }
+        }
+        else
+        {
+            if(GA_SetPos(axis,pos-10))
+            {
+                qDebug()<<"set pos failed";
+                GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
+                return;
+            }
+            if(GA_Update(0x0001<<(axis-1)))
+            {
+                qDebug()<<"update failed";
+                GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
+                return;
+            }
+        }
+        cnt++;
+        if(cnt>1)
+            timer->stop();
+    });
     timer->setInterval(50);
     timer->start();
-}
-void Controller::timerSlot()
-{
-    short axis=6;
-    long status=0;
-    if(GA_GetSts(axis,&status))
-    {
-        qDebug()<<"read status failed";
-        GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
-        return;
-    }
-    if(status & AXIS_STATUS_RUNNING)
-    {
-        qDebug()<<"running";
-        return;
-    }
-    double pos;static int cnt=0;
-    if(GA_GetAxisPrfPos(axis,&pos))
-    {
-        qDebug()<<"read pos failed";
-        GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
-        return;
-    }
-    if(cnt%2)
-    {
-        if(GA_SetPos(axis,pos+10))
-        {
-            qDebug()<<"set pos failed";
-            GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
-            return;
-        }
-        if(GA_Update(0x0001<<(axis-1)))
-        {
-            qDebug()<<"update failed";
-            GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
-            return;
-        }
-    }
-    else
-    {
-        if(GA_SetPos(axis,pos-10))
-        {
-            qDebug()<<"set pos failed";
-            GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
-            return;
-        }
-        if(GA_Update(0x0001<<(axis-1)))
-        {
-            qDebug()<<"update failed";
-            GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
-            return;
-        }
-    }
-    cnt++;
-    if(cnt>1)
-        timer->stop();
 }
 
 void Controller::reset(int addr)
@@ -538,49 +537,43 @@ void Controller::simpleTrajectory(int mode)
 {
     qDebug()<<"enter simple trajectory mode\n";
     double diff_height=20;
-    double x_amp=60;
-    bool dir=true;
-    auto lens=kinematicModule->GetLength(0,0,normalZ+diff_height,0,0,0);
+    initMode(2,2,5,MotionMode::TRAP);
+    auto lens=kinematicModule->GetLength(0,0,normalZ,0,0,0);
     MoveLegs(lens);
     QThread::sleep(1);
-    int cnt=0,total=30;
-    while(true)
+    lens=kinematicModule->GetLength(0,0,normalZ+diff_height,0,0,0);
+    MoveLegs(lens);
+    connect(timer,&QTimer::timeout,this,[this,diff_height]()
     {
-        if(mode==0)
+        sendData();
+        long status=0;
+        for(short axis=1;axis<=6;axis++)
         {
-            if(dir)
+            if(GA_GetSts(axis,&status))
             {
-                auto lens=kinematicModule->GetLength(x_amp,0,normalZ+diff_height,0,0,0);
-                MoveLegs(lens);
-                dir=false;
+                qDebug()<<"read status failed";
+                GA_Stop(0x0001<<(axis-1),0x0001<<(axis-1));
             }
-            else
-            {
-                auto lens=kinematicModule->GetLength(-x_amp,0,normalZ+diff_height,0,0,0);
-                MoveLegs(lens);
-                dir=true;
-            }
-            QThread::sleep(2);
+            if(status & AXIS_STATUS_RUNNING)
+                return;
         }
-        else if(mode==1)
+        qDebug()<<"motion finished!!";
+        QThread::msleep(50);
+        static int flag=0;
+        if(flag==0)
         {
-            auto lens=kinematicModule->GetLength(x_amp/total*cnt,0,normalZ+diff_height,0,0,0);
+            auto lens=kinematicModule->GetLength(0,0,normalZ-diff_height,0,0,0);
             MoveLegs(lens);
-            if(dir)
-            {
-                cnt++;
-                if(cnt>total)
-                    dir=false;
-            }
-            else
-            {
-                cnt--;
-                if(cnt<-total)
-                    dir=true;
-            }
-            QThread::msleep(10);
         }
-    }
+        else
+        {
+            auto lens=kinematicModule->GetLength(0,0,normalZ+diff_height,0,0,0);
+            MoveLegs(lens);
+        }
+        flag=1-flag;
+    });
+    timer->setInterval(5);
+    timer->start();
 }
 void Controller::updatePosition(QByteArray data)
 {
@@ -765,13 +758,19 @@ void Controller::sendData()
             data.append(static_cast<char>(static_cast<int16_t>(velZ_othermm)&0x00ff));
             data.append(static_cast<char>(static_cast<int16_t>(disZ_othermm)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(disZ_othermm)&0x00ff));
-            double zTrans=0;
+            double zTrans=0,xTrans=0,yTrans=0;
             frame_mutex.lock();
             if(!FrameTranslation.empty())
                 zTrans=FrameTranslation.at<double>(1,0)*1000;
+                xTrans=FrameTranslation.at<double>(0,0)*1000;
+                yTrans=FrameTranslation.at<double>(2,0)*1000;
             frame_mutex.unlock();
             data.append(static_cast<char>(static_cast<int16_t>(zTrans)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(zTrans)&0x00ff));
+            data.append(static_cast<char>(static_cast<int16_t>(xTrans)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(xTrans)&0x00ff));
+            data.append(static_cast<char>(static_cast<int16_t>(yTrans)>>8));
+            data.append(static_cast<char>(static_cast<int16_t>(yTrans)&0x00ff));
             imuClient->write(data);
         }
     }
