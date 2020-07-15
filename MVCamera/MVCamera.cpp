@@ -77,7 +77,7 @@ int MVCamera::Init(int id) {
 
   //设置输出为彩色
   channel = 3;
-  CameraSetIspOutFormat(hCamera, CAMERA_MEDIA_TYPE_RGB8);
+  CameraSetIspOutFormat(hCamera, CAMERA_MEDIA_TYPE_BGR8);
 
   //初始化缓冲区
   for (int i = 0; i < RGB_BUFSIZE; ++i)

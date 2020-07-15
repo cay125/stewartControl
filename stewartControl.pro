@@ -25,8 +25,10 @@ SOURCES += \
         main.cpp \
         minsquresolver.cpp \
         modbuscontroller.cpp \
+        motiondetector.cpp \
         pidcontroller.cpp \
         poseestimation2d2d.cpp \
+        poseestimation3d2d.cpp \
         serialport.cpp \
         zerodetector.cpp
 
@@ -42,8 +44,10 @@ HEADERS += \
     inversekinematic.h \
     minsquresolver.h \
     modbuscontroller.h \
+    motiondetector.h \
     pidcontroller.h \
     poseestimation2d2d.h \
+    poseestimation3d2d.h \
     serialport.h \
     timemeasure.h \
     zerodetector.h
@@ -54,7 +58,10 @@ INCLUDEPATH += MVCamera\
 INCLUDEPATH += C:\MySoftware\opencv3.4.3\opencv\build\include\
                C:\MySoftware\opencv3.4.3\opencv\build\include\opencv\
                C:\MySoftware\opencv3.4.3\opencv\build\include\opencv2\
+INCLUDEPATH += C:\MySoftware\Matlab\extern\include\
 
 LIBS += ../stewartControl/GAS.lib
 LIBS += ../stewartControl/MVCamera/MVCAMSDK_X64.lib
 LIBS += C:/MySoftware/opencv3.4.3/opencv/build/x64/vc15/lib/opencv_world343.lib
+LIBS += C:/MySoftware/Matlab/extern/lib/win64/microsoft/libMatlabEngine.lib
+LIBS += C:/MySoftware/Matlab/extern/lib/win64/microsoft/libMatlabDataArray.lib
