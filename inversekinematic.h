@@ -17,6 +17,7 @@ class inverseKinematic
 {
 public:
     explicit inverseKinematic(stewartPara* _para);
+    QVector<double> GetXYOffset(double z,double rotateX, double rotateY, double rotateZ);
     QVector<double> GetLength(double x,double y,double z,double rotateX,double rotateY, double rotateZ);
     QVector<double> GetSpeed(double gyrox,double gyroy,double gyroz);
     qint64 Len2Pulse(double);

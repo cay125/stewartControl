@@ -66,6 +66,30 @@ Eigen::Matrix3d inverseKinematic::rotation3D(double angle, Eigen::Vector3d axis)
     Eigen::Matrix3d outputR=Eigen::Matrix3d::Identity(3,3)+(1-qCos(angle))*inverseMat*inverseMat+qSin(angle)*inverseMat;
     return outputR;
 }
+QVector<double> inverseKinematic::GetXYOffset(double z, double rotateX, double rotateY, double rotateZ)
+{
+    rotateX=rotateX*M_PI/180;
+    rotateY=rotateY*M_PI/180;
+    rotateZ=rotateZ*M_PI/180;
+    Eigen::Matrix3d RX,RY,RZ;
+    RX<<1,0,0,
+        0,qCos(rotateX),-qSin(rotateX),
+        0,qSin(rotateX), qCos(rotateX);
+    RY<< qCos(rotateY),0,qSin(rotateY),
+                     0,1,0,
+        -qSin(rotateY),0,qCos(rotateY);
+    RZ<<qCos(rotateZ),-qSin(rotateZ),0,
+        qSin(rotateZ), qCos(rotateZ),0,
+        0,0,1;
+    Eigen::Matrix3d t_R=RZ*RX*RY;
+    Eigen::MatrixXd t_p(3,1);
+    t_p(0,0)=0;t_p(1,0)=0;t_p(2,0)=z;
+    auto xyoffset=t_R*t_p;
+    QVector<double> res;
+    for(int i=0;i<3;i++)
+        res.push_back(xyoffset(i,0));
+    return res;
+}
 QVector<double> inverseKinematic::GetLength(double x,double y,double z,double rotateX,double rotateY, double rotateZ)
 {
     rotateX=rotateX*M_PI/180;
