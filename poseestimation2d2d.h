@@ -8,7 +8,8 @@
 #include <QVector>
 
 #define __SHOW_SRC__ 1
-#define __SHOW_DEBUG_IMG 0
+#define __SHOW_DEBUG_IMG__ 0
+#define __USE_CORNER__ 1
 
 class PoseEstimation
 {
