@@ -43,7 +43,7 @@ extern ZeroDetector* globaldetector;
 extern bool globalStableStatus;
 
 enum Status{Simple,GUIControl,IMUControl};
-enum MotionMode{JOG,TRAP,Both};
+enum MotionMode{JOG,TRAP,BOTH};
 class ImuTime
 {
 public:

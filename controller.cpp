@@ -302,7 +302,7 @@ void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
     }
 #endif
     TIMEBEGIN()
-    if(mode==MotionMode::JOG || mode==MotionMode::Both)
+    if(mode==MotionMode::JOG || mode==MotionMode::BOTH)
         GA_GetPrfPos(1,currentPos,6);
     TIMEEND("Get Pos:")
     TIMEBEGIN()
@@ -327,7 +327,7 @@ void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
             poses[legIndex2Motion[i-1]-1]=-kinematicModule->Len2Pulse(pos[i-1]);
 #endif
         }
-        else if(mode==MotionMode::Both)
+        else if(mode==MotionMode::BOTH)
         {
             poses[legIndex2Motion[i-1]-1]=-kinematicModule->Len2Pulse(pos[i-1]);
         }
@@ -341,7 +341,7 @@ void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
     if(mode==MotionMode::TRAP)
         MoveMultiLegInTrap(1,6,poses);
 #endif
-    if(mode==MotionMode::Both)
+    if(mode==MotionMode::BOTH)
         MoveMultiLegInBoth(1,6,poses,currentPos);
     TIMEEND("Set Speed:")
     TIMEBEGIN()
@@ -424,7 +424,7 @@ void Controller::updateAxis(int start, int end)
 }
 void Controller::initMode(double acc,double dec,double speed,MotionMode mode)
 {
-    if(mode==MotionMode::Both)
+    if(mode==MotionMode::BOTH)
     {
         qDebug()<<"Error: Init mode wrong";
         exit(1);
@@ -556,7 +556,7 @@ void Controller::IMUControlMode()
         auto xyz=kinematicModule->GetXYOffset(normalZ-zTransVision*0.01, -angleX,-angleY,0);
         refPos = kinematicModule->GetLength(xyz[0],xyz[1],xyz[2],-angleX,-angleY,0);
         //refPos = kinematicModule->GetLength(0,0,normalZ-zTransVision*0.01,-angleX,-angleY,0);
-        MoveLegs(refPos,MotionMode::Both);
+        MoveLegs(refPos,MotionMode::BOTH);
         TIMEBEGIN()
         sendData();
         TIMEEND("Send Data:")
