@@ -416,6 +416,7 @@ GA_API int GA_GetPos(short nAxisNum,long *pPos);
 GA_API int GA_SetVel(short nAxisNum,double vel);
 GA_API int GA_GetVel(short nAxisNum,double *pVel);
 GA_API int GA_SetMultiVel(short nAxisNum,double *pVel,short nCount=1);
+GA_API int GA_SetMultiPos(short nAxisNum,long *pPos,short nCount=1);
 GA_API int GA_Update(long mask);
 
 //电子齿轮模式指令列表

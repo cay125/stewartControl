@@ -6,14 +6,17 @@ QMutex m_mutex;
 QMutex imu_mutex;
 QMutex frame_mutex;
 QWaitCondition m_cond;
+QWaitCondition frame_cond;
 QByteArray globalByteArray;
 QByteArray globalGyroArray;
 QByteArray globalTopAngleArray;
 QByteArray globalAccArray;
 QByteArray globalTimeArray;
 double globalVelZ=0,globalDisZ=0,globalStaticGravity=0;
-cv::Mat FrameRotation,FrameTranslation;
+cv::Mat FrameRotation(3,3,CV_64F),FrameTranslation(3,1,CV_64F);
 int ImuTime::timeStampUntilNow=0;
+ZeroDetector* globaldetector=nullptr;
+bool globalStableStatus=true;
 Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject* parent):QObject(parent),timer(new QTimer),RS485(new modbusController),tcpServer(new QTcpServer(this)),uart(new SerialPort),detector(new ZeroDetector)
 {
     //stewartPara *para=new stewartPara(170, 80, 290, 47);
@@ -48,7 +51,17 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
         qDebug()<<"one connection established from ip: "<<ip<<" port: "<<port;
         this->tcpClients << tcpClient;
         tcpClient->setParent(this);
-        connect(tcpClient,&QTcpSocket::readyRead,this,&Controller::tcpReadDataSlot);
+        //connect(tcpClient,&QTcpSocket::readyRead,this,&Controller::tcpReadDataSlot);
+        if(port == 9001)
+        {
+            visionClient=tcpClient;
+            qDebug()<<"vision client connected";
+        }
+        else if(port == 9002)
+        {
+            imuClient=tcpClient;
+            qDebug()<<"imu client connected";
+        }
         connect(tcpClient,&QTcpSocket::disconnected,this,[this]()
         {
             QTcpSocket *pClient = qobject_cast<QTcpSocket *>(sender());
@@ -59,7 +72,15 @@ Controller::Controller(char* com_card, char* com_modbus, char* com_imu, QObject*
             {
                 tcpClients.removeAll(pClient);
                 if(imuClient==pClient)
+                {
                     imuClient=nullptr;
+                    qDebug()<<"imu client disconnected";
+                }
+                if(visionClient==pClient)
+                {
+                    visionClient=nullptr;
+                    qDebug()<<"vision client disconnected";
+                }
                 pClient->deleteLater();
             }
         });
@@ -273,18 +294,31 @@ void Controller::GetCurrentPos(int addr)
 }
 void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
 {
+#if !MULTI_POS || !MULTI_VEL
+    if(mode==MotionMode::Both)
+    {
+        qDebug()<<"Error: Set wrong motion mode";
+        exit(1);
+    }
+#endif
     TIMEBEGIN()
-    if(mode==MotionMode::JOG)
+    if(mode==MotionMode::JOG || mode==MotionMode::Both)
         GA_GetPrfPos(1,currentPos,6);
     TIMEEND("Get Pos:")
     TIMEBEGIN()
-#if MULTI_VEL
+#if MULTI_VEL || MULTI_POS
     QVector<qint64> poses(6);
 #endif
     for(int i=1;i<=6;i++)
     {
         if(mode==MotionMode::TRAP)
+        {
+#if !MULTI_POS
             MoveLeg(legIndex2Motion[i-1], kinematicModule->Len2Pulse(pos[i-1]));
+#else
+            poses[legIndex2Motion[i-1]-1]=-kinematicModule->Len2Pulse(pos[i-1]);
+#endif
+        }
         else if(mode==MotionMode::JOG)
         {
 #if !MULTI_VEL
@@ -293,16 +327,41 @@ void Controller::MoveLegs(QVector<double>& pos,MotionMode mode)
             poses[legIndex2Motion[i-1]-1]=-kinematicModule->Len2Pulse(pos[i-1]);
 #endif
         }
-        qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
+        else if(mode==MotionMode::Both)
+        {
+            poses[legIndex2Motion[i-1]-1]=-kinematicModule->Len2Pulse(pos[i-1]);
+        }
+        //qDebug() << "Leg: "<<i<<" length: "<< pos[i-1];
     }
 #if MULTI_VEL
     if(mode==MotionMode::JOG)
         MoveMultiLegInJog(1,6,poses,currentPos);
 #endif
+#if MULTI_POS
+    if(mode==MotionMode::TRAP)
+        MoveMultiLegInTrap(1,6,poses);
+#endif
+    if(mode==MotionMode::Both)
+        MoveMultiLegInBoth(1,6,poses,currentPos);
     TIMEEND("Set Speed:")
     TIMEBEGIN()
     updateAxis(1,6);
     TIMEEND("Update Axis:")
+}
+void Controller::MoveMultiLegInBoth(short addrStart, short addrEnd, QVector<qint64> &poses, double *currentPoses)
+{
+    MoveMultiLegInJog(addrStart,addrEnd,poses,currentPoses);
+    long refPoses[6]={0};
+    for(int addr=addrStart;addr<=addrEnd;addr++)
+        refPoses[addr-1]=static_cast<long>(poses[addr-1]);
+    GA_SetMultiPos(addrStart,refPoses+addrStart-1,addrEnd-addrStart+1);
+}
+void Controller::MoveMultiLegInTrap(short addrStart, short addrEnd, QVector<qint64> &poses)
+{
+    long refPoses[6]={0};
+    for(int addr=addrStart;addr<=addrEnd;addr++)
+        refPoses[addr-1]=static_cast<long>(poses[addr-1]);
+    GA_SetMultiPos(addrStart,refPoses+addrStart-1,addrEnd-addrStart+1);
 }
 void Controller::MoveMultiLegInJog(short addrStart, short addrEnd, QVector<qint64>& poses, double *currentPoses)
 {
@@ -365,6 +424,11 @@ void Controller::updateAxis(int start, int end)
 }
 void Controller::initMode(double acc,double dec,double speed,MotionMode mode)
 {
+    if(mode==MotionMode::Both)
+    {
+        qDebug()<<"Error: Init mode wrong";
+        exit(1);
+    }
     for(short axis=1;axis<=6;axis++)
     {
         if(mode==MotionMode::TRAP)
@@ -454,29 +518,45 @@ void Controller::IMUControlMode()
             axis++;
     }
     qDebug()<<"move home finished";
-    qDebug()<<"wait for platform being stable..";
-    QThread::msleep(3000);
-    qDebug()<<"start correct gra";
-    correctionGra();
-    qDebug()<<"correct gra finished\nconrrection gravity is: "<<staticAcc;
-    detector->setStaticGra(staticAcc);
-    initMode(3,3,10,MotionMode::JOG);
+//    qDebug()<<"wait for platform being stable..";
+//    QThread::msleep(3000);
+//    qDebug()<<"start correct gra";
+//    correctionGra();
+//    qDebug()<<"correct gra finished\nconrrection gravity is: "<<staticAcc;
+//    detector->setStaticGra(staticAcc);
+//    globaldetector=detector;
+    initMode(3,3,10,MotionMode::TRAP);
     connect(timer,&QTimer::timeout,this,[this]()
     {
+        if(visionClient)
+        {
+            auto array=visionClient->readAll();
+            if(array.size()>0)
+            {
+                auto new_array=array.mid(array.length()-4);
+                union {float f;uint32_t d;};
+                d=static_cast<uint32_t>(static_cast<uint8_t>(new_array[3])<<24|static_cast<uint8_t>(new_array[2])<<16|static_cast<uint8_t>(new_array[1])<<8|static_cast<uint8_t>(new_array[0]));
+                zTransVision=f*1000;
+                qDebug()<<" ZTransVision: "<<zTransVision;
+            }
+        }
         TIMEBEGIN()
         analyseData();
-        qDebug()<<"angleX: "<<angleX<<" "<<"angleY: "<<angleY<<"angleZ: "<<angleZ;
-        qDebug()<<"accX: "<<accX<<" accY: "<<accY<<" accZ: "<<accZ;
-        qDebug()<<"OrientAccZ: "<<orientAccZ<<" after filter: "<<orientAccZ_AfterFilter;
-        qDebug()<<"velX: "<<velX<<" velY: "<<velY<<" velZ: "<<velZ;
-        qDebug()<<"disX: "<<disX<<" disY: "<<disY<<" disZ: "<<disZ;
+        //qDebug()<<"angleX: "<<angleX<<" angleY: "<<angleY<<" angleZ: "<<angleZ;
+        //qDebug()<<"gyroX: "<<gyroX<<" gyroY: "<<gyroY<<" gyroZ: "<<gyroZ;
+        //qDebug()<<"accX: "<<accX<<" accY: "<<accY<<" accZ: "<<accZ;
+        //qDebug()<<"OrientAccZ: "<<orientAccZ<<" after filter: "<<orientAccZ_AfterFilter;
+        //qDebug()<<"velX: "<<velX<<" velY: "<<velY<<" velZ: "<<velZ;
+        //qDebug()<<"disX: "<<disX<<" disY: "<<disY<<" disZ: "<<disZ;
 #if HARDLIMITS
         //GA_ClrSts(1,6); //it looks we needn't to clear state
 #endif
         //refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,gyroZ);
         refSpeed = kinematicModule->GetSpeed(gyroX,gyroY,0);
-        refPos = kinematicModule->GetLength(0,0,normalZ,-angleX,-angleY,0);
-        MoveLegs(refPos,MotionMode::JOG);
+        auto xyz=kinematicModule->GetXYOffset(normalZ-zTransVision*0.01, -angleX,-angleY,0);
+        refPos = kinematicModule->GetLength(xyz[0],xyz[1],xyz[2],-angleX,-angleY,0);
+        //refPos = kinematicModule->GetLength(0,0,normalZ-zTransVision*0.01,-angleX,-angleY,0);
+        MoveLegs(refPos,MotionMode::Both);
         TIMEBEGIN()
         sendData();
         TIMEEND("Send Data:")
@@ -533,17 +613,11 @@ void Controller::tcpReadDataSlot()
     }
     //qDebug()<<array;
 }
-void Controller::simpleTrajectory(int mode)
+void Controller::simpleTrajectory(double diff_x,double diff_y,double diff_z)
 {
     qDebug()<<"enter simple trajectory mode\n";
-    double diff_height=20;
     initMode(2,2,5,MotionMode::TRAP);
-    auto lens=kinematicModule->GetLength(0,0,normalZ,0,0,0);
-    MoveLegs(lens);
-    QThread::sleep(1);
-    lens=kinematicModule->GetLength(0,0,normalZ+diff_height,0,0,0);
-    MoveLegs(lens);
-    connect(timer,&QTimer::timeout,this,[this,diff_height]()
+    connect(timer,&QTimer::timeout,this,[this,diff_x,diff_y,diff_z]()
     {
         sendData();
         long status=0;
@@ -562,17 +636,17 @@ void Controller::simpleTrajectory(int mode)
         static int flag=0;
         if(flag==0)
         {
-            auto lens=kinematicModule->GetLength(0,0,normalZ-diff_height,0,0,0);
+            auto lens=kinematicModule->GetLength(+diff_x,+diff_y,normalZ+diff_z,0,0,0);
             MoveLegs(lens);
         }
         else
         {
-            auto lens=kinematicModule->GetLength(0,0,normalZ+diff_height,0,0,0);
+            auto lens=kinematicModule->GetLength(-diff_x,-diff_y,normalZ-diff_z,0,0,0);
             MoveLegs(lens);
         }
         flag=1-flag;
     });
-    timer->setInterval(5);
+    timer->setInterval(50);
     timer->start();
 }
 void Controller::updatePosition(QByteArray data)
@@ -659,15 +733,22 @@ void Controller::analyseData(bool calculateDis)
                 double duration=ImuTime::GetDuration(t_stamp,timeStamp)/1000.0;
                 //qDebug()<<"duration: "<<duration*1000;
 #if ZUPT
-                if(!detector->DetectZero(orientAccZ_AfterFilter))
-                {
-                    disZ=disZ+velZ*duration+0.5*(orientAccZ_AfterFilter-staticAcc)*duration*duration;
-                    velZ+=duration*(orientAccZ_AfterFilter-staticAcc);
-                }
-                else
-                {
-                    velZ=0;
-                }
+//                if(!detector->DetectZero(orientAccZ_AfterFilter))
+//                {
+//                    disZ=disZ+velZ*duration+0.5*(orientAccZ_AfterFilter-staticAcc)*duration*duration;
+//                    velZ+=duration*(orientAccZ_AfterFilter-staticAcc);
+//                    frame_mutex.lock();
+//                    globalStableStatus=false;
+//                    frame_cond.wakeOne();
+//                    frame_mutex.unlock();
+//                }
+//                else
+//                {
+//                    frame_mutex.lock();
+//                    globalStableStatus=true;
+//                    frame_mutex.unlock();
+//                    velZ=0;
+//                }
 #else
                 disZ=disZ+velZ*duration+0.5*(orientAccZ-staticAcc)*duration*duration;
                 velZ+=duration*(orientAccZ-staticAcc);
@@ -771,6 +852,10 @@ void Controller::sendData()
             data.append(static_cast<char>(static_cast<int16_t>(xTrans)&0x00ff));
             data.append(static_cast<char>(static_cast<int16_t>(yTrans)>>8));
             data.append(static_cast<char>(static_cast<int16_t>(yTrans)&0x00ff));
+            union {float f;uint32_t d;};
+            f=zTransVision;
+            for(int i=0;i<4;i++)
+                data.append(static_cast<char>((d>>(8*(3-i)))&0xff));
             imuClient->write(data);
         }
     }
